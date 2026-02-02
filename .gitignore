@@ -1,3 +1,90 @@
+# ===================================================================
+# Python.gitignore
+# ===================================================================
+
+# ========================================
+# Jupyter Notebook
+# ========================================
+
+.ipynb_checkpoints/
+
+# ===================================================================
+# Data
+# ===================================================================
+
+.data/
+data/*.csv
+data/*.parquet
+data/*.pkl
+data/*.pickle
+data/*.h5
+data/*.hdf5
+data/*.feather
+data/*.arrow
+!data/.gitkeep
+
+# ===================================================================
+# Models / Checkpoints
+# ===================================================================
+
+*.pt
+*.pth
+*.onnx
+*.safetensors
+checkpoints/
+models/*.bin
+!models/.gitkeep
+
+# ========================================
+# Shared Resources
+# ========================================
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# envs/ directory (Docker env files)
+envs/**/*.env
+!envs/**/*.env.example
+
+# Secrets
+*.key
+*.pem
+*.p12
+*.pfx
+
+# ========================================
+# Logs
+# ========================================
+
+logs/*
+!logs/.gitkeep
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ========================================
+# Docker
+# ========================================
+
+*.local.yml
+
+# ========================================
+# Temporary / Cache
+# ========================================
+
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+.cache/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -42,7 +129,6 @@ htmlcov/
 .nox/
 .coverage
 .coverage.*
-.cache
 nosetests.xml
 coverage.xml
 *.cover
@@ -56,7 +142,6 @@ cover/
 *.pot
 
 # Django stuff:
-*.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
@@ -74,9 +159,6 @@ docs/_build/
 # PyBuilder
 .pybuilder/
 target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
 
 # IPython
 profile_default/
@@ -135,7 +217,6 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
 .envrc
 .venv
 env/
@@ -181,27 +262,24 @@ cython_debug/
 # Learn more at https://abstra.io/docs
 .abstra/
 
-# Visual Studio Code
-#  Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
-#  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#  and can be added to the global gitignore or merged into this file. However, if you prefer, 
-#  you could uncomment the following to ignore the entire vscode folder
-# .vscode/
+# Marimo
+marimo/_static/
+marimo/_lsp/
+__marimo__/
+
+# ========================================
+# Misc
+# ========================================
+
+# Local scripts
+*.local.sh
+*.local.py
+
+# vscode settings
+.vscode/settings.json
 
 # Ruff stuff:
 .ruff_cache/
 
 # PyPI configuration file
 .pypirc
-
-# Cursor
-#  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
-#  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
-#  refer to https://docs.cursor.com/context/ignore-files
-.cursorignore
-.cursorindexingignore
-
-# Marimo
-marimo/_static/
-marimo/_lsp/
-__marimo__/
