@@ -2,7 +2,7 @@ import pandas as pd
 from typing import List, Tuple
 from pathlib import Path
 
-from statsmodels.tsa.seasonal import STL
+from statsmodels.tsa.seasonal import STL, MSTL
 
 from utils.logging import setup_logging
 
@@ -32,7 +32,7 @@ class DataProcessor:
             raise FileNotFoundError(f"File not found: {file_path}")
         return pd.read_csv(file_path)
     
-    def preprocess_data(self, df: pd.DataFrame, add_features: List[str]) -> pd.DataFrame:
+    def preprocess_data(self, df: pd.DataFrame, add_features: List[str], **kwargs) -> pd.DataFrame:
         """
         データの前処理を行います。ここでは、欠損値の除去と重複行の削除を行います。
 
@@ -49,6 +49,12 @@ class DataProcessor:
         _log.debug(f"Dropped duplicate rows, remaining rows: {_df.shape[0]}")
         _df = self.add_features(_df, add_features)
         _log.info(f"Dropped {len(df) - len(_df)} rows, Added {len(add_features)} features")
+        process_col = ["OT", "HUFL", "HULL", "LUFL", "LULL", "MUFL", "MULL"]
+        for col in process_col:
+            if col in _df.columns:
+                _df[col] = pd.to_numeric(_df[col], errors='coerce')
+                _log.debug(f"Converted column {col} to numeric")
+                # _df, stl_result = self.run_mstl_decomposition(_df, date_col="date", target_col=col, prefix=f"stl_{col}_")
         _log.info("Data preprocessing completed")
         return _df
 
@@ -77,7 +83,7 @@ class DataProcessor:
         _log.debug("Feature addition completed")
         return df
     
-    def run_stl_decomposition(self, df: pd.DataFrame, date_col: str, target_col: str="OT") -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def run_stl_decomposition(self, df: pd.DataFrame, date_col: str, target_col: str="OT", **kwargs) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         STL分解を実行し、分解された成分を DataFrame に追加します。
 
@@ -90,18 +96,21 @@ class DataProcessor:
         :return: 分解結果を含む DataFrame のタプル
         :rtype: Tuple[pd.DataFrame, pd.DataFrame]
         """
+        prefix = kwargs.get("prefix", "")
 
         stl = STL(df[target_col], seasonal=13, trend=25, period=24, robust=True)
         result = stl.fit()
-        df['trend'] = result.trend
-        df['seasonal'] = result.seasonal
-        df['resid'] = result.resid
+        df[f'{prefix}trend'] = result.trend
+        df[f'{prefix}seasonal'] = result.seasonal
+        df[f'{prefix}resid'] = result.resid
         result_df = pd.DataFrame()
-        result_df['trend'] = result.trend
-        result_df['seasonal'] = result.seasonal
-        result_df['resid'] = result.resid
+        result_df[f'{prefix}trend'] = result.trend
+        result_df[f'{prefix}seasonal'] = result.seasonal
+        result_df[f'{prefix}resid'] = result.resid
         _log.debug("STL decomposition completed and components added to DataFrame")
         return (df, result_df)
+    
+    # def run_mstl_decomposition(self, df: pd.DataFrame, date_col: str, target_col: str="OT", **kwargs) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
     def describe_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """
