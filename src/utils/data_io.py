@@ -17,7 +17,7 @@ def save_dataframe_to_parquet(df: pd.DataFrame, file_path: Union[str, Path], **k
         file_path: Path to save the Parquet file
     """
     data_type = kwargs.get("data_type", "experiment")
-    data_cfg = load_config_section("config/config.yml", "data")
+    data_cfg = kwargs.get("config", load_config_section("../config/config.yml", "data"))
     save_folder = data_cfg.get(data_type, "./data")
     path = Path(save_folder) / file_path
     # File Suffix check

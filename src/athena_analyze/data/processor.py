@@ -1,3 +1,4 @@
+from logging import config
 import pandas as pd
 from typing import List, Tuple
 from pathlib import Path
@@ -93,8 +94,35 @@ class DataProcessor:
             lag_cfg = kwargs.get("lag", {})
             lag_periods = lag_cfg.get("periods", [1, 2, 3, 6, 12, 24])
             _train_df, _test_df = self.create_lags(_train_df, _test_df, lag_periods)
+        if "moving_average" in method:
+            ma_cfg = kwargs.get("moving_average", {})
+            _train_df, _test_df = self.create_moving_averages(_train_df, _test_df, config=ma_cfg)
         _log.info("Data preprocessing completed")
         return _train_df, _test_df
+
+    def create_moving_averages(self, train_df: pd.DataFrame, test_df: pd.DataFrame, **kwargs) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        指定された特徴量に対して移動平均特徴量を作成します。
+        
+        :param self: 説明
+        :param train_df: 説明
+        :type train_df: pd.DataFrame
+        :param test_df: 説明
+        :type test_df: pd.DataFrame
+        :return: 説明
+        :rtype: Tuple[DataFrame, DataFrame]
+        """
+        features = self.cols_to_use
+        ma_cfg = kwargs.get("config", {})
+        for feature in features:
+            window_sizes = ma_cfg.get(feature, {}).get("windows", [3, 6, 12])
+            for window in window_sizes:
+                ma_col_name = f"{feature}_ma_{window}"
+                train_df[ma_col_name] = train_df[feature].rolling(window=window, min_periods=1).mean()
+                combined_values = pd.concat([train_df[feature].iloc[-window+1:], test_df[feature]], ignore_index=True)
+                test_df[ma_col_name] = combined_values.rolling(window=window, min_periods=1).mean().iloc[window-1:].reset_index(drop=True)
+            _log.debug(f"Created moving average features for {feature}")
+        return train_df, test_df
 
     def create_lags(self, train_df: pd.DataFrame, test_df: pd.DataFrame,
                     periods: List[int]) -> Tuple[pd.DataFrame, pd.DataFrame]:
