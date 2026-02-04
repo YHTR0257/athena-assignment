@@ -1,0 +1,87 @@
+experiment_name: "exp_001"
+preprocess:
+  h1:
+    add_features: ["date_features", "season", "lag_features"]
+    method: ["mstl", "lag", "moving_average"]
+    mstl:
+      general:
+        iterate: 10
+        stl_kwargs:
+          robust: true
+      OT:
+        periods: [24, 2160]
+      HUFL:
+        periods: [12, 24]
+      HULL:
+        periods: [12, 24]
+      MUFL:
+        periods: [12, 24]
+      MULL:
+        periods: [12, 24]
+      LUFL:
+        periods: [12, 24]
+      LULL:
+        periods: [12, 24]
+    lag:
+      periods: [1, 3, 6]
+    moving_average:
+      OT:
+        windows: [3, 6, 12]
+      HUFL:
+        windows: [3, 6, 12]
+      HULL:
+        windows: [3, 6, 12]
+      MUFL:
+        windows: [3, 6, 12]
+      MULL:
+        windows: [3, 6, 12]
+      LUFL:
+        windows: [3, 6, 12]
+      LULL:
+        windows: [3, 6, 12]
+    scale:
+      method: "standard"
+  h2:
+    add_features: ["date_features", "season", "lag_features"]
+    method: ["mstl", "lag", "moving_average"]
+    mstl:
+      general:
+        iterate: 10
+        stl_kwargs:
+          robust: true
+      OT:
+        periods: [24, 2160]
+      HUFL:
+        periods: [12, 24]
+      HULL:
+        periods: [12, 24]
+      MUFL:
+        periods: [12, 24]
+      MULL:
+        periods: [12, 24]
+      LUFL:
+        periods: [12, 24]
+      LULL:
+        periods: [12, 24]
+    lag:
+      periods: [1, 3, 6]
+    moving_average:
+      OT:
+        windows: [3, 6, 12]
+      HUFL:
+        windows: [3, 6, 12]
+      HULL:
+        windows: [3, 6, 12]
+      MUFL:
+        windows: [3, 6, 12]
+      MULL:
+        windows: [3, 6, 12]
+      LUFL:
+        windows: [3, 6, 12]
+      LULL:
+        windows: [3, 6, 12]
+    scale:
+      method: "standard"
+model:
+train:
+evaluation:
