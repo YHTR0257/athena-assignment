@@ -1,9 +1,11 @@
 from logging import config
+from matplotlib.pylab import f
 import pandas as pd
 from typing import List, Tuple
 from pathlib import Path
 import numpy as np
 
+from sklearn.discriminant_analysis import StandardScaler
 from statsmodels.tsa.seasonal import MSTL
 
 from utils.logging import setup_logging
@@ -17,6 +19,7 @@ class DataProcessor:
 
     def __init__(self, data_fol:str):
         self.data_folder = Path(data_fol)
+        self.target_col = "OT"
         _log.debug(f"DataProcessor initialized with data folder: {self.data_folder}")
         self.cols_to_use = ["OT", "HUFL", "HULL", "LUFL", "LULL", "MUFL", "MULL"]
     
@@ -97,6 +100,18 @@ class DataProcessor:
         if "moving_average" in method:
             ma_cfg = kwargs.get("moving_average", {})
             _train_df, _test_df = self.create_moving_averages(_train_df, _test_df, config=ma_cfg)
+        if "sin_cos_features" in method:
+            scf_cfg = kwargs.get("sin_cos_features", {})
+            _train_df = self.sin_cos_features(_train_df, date_col="date", config=scf_cfg)
+            _test_df = self.sin_cos_features(_test_df, date_col="date", config=scf_cfg)
+        _log.info(f"Preprocessing methods applied: {method}")
+        _log.info(f"Starting data normalization")
+
+        norm_cfg = kwargs.get("normalization", {})
+        # normコンフィグが存在する場合に正規化を実行
+        if norm_cfg:
+            _train_df, _test_df = self.normalize_data(_train_df, _test_df, config=norm_cfg)
+
         _log.info("Data preprocessing completed")
         return _train_df, _test_df
 
@@ -154,7 +169,7 @@ class DataProcessor:
             _log.debug(f"Created lag features for {feature}")
         return train_df, test_df
 
-    def add_features(self, df: pd.DataFrame, features: List[str]) -> pd.DataFrame:
+    def add_features(self, df: pd.DataFrame, features: List[str], **kwargs) -> pd.DataFrame:
         """
         指定された特徴量を DataFrame に追加します。
 
@@ -280,3 +295,59 @@ class DataProcessor:
         description = df.describe()
         _log.debug("Data description calculated")
         return description
+    
+    def sin_cos_features(self, df: pd.DataFrame, **kwargs) -> pd.DataFrame:
+        """
+        指定された時刻に基づいてサイン・コサイン特徴量を追加します。
+
+        :param self: 説明
+        :param df: 時刻情報が含まれる DataFrame。すでに date_col が datetime 型であることを前提としています。
+        :type df: pd.DataFrame
+        :param date_col: 日付を示す列名（デフォルトは "date"）
+        :return: サイン・コサイン特徴量が追加された DataFrame
+        :rtype: pd.DataFrame
+        """
+
+        date_col = kwargs.get("date_col", "date")
+
+        periods = kwargs.get("config", {}).get("periods", [24, 168, 2160])
+        for p in periods:
+            df[f'sin_{p}'] = np.sin(2 * np.pi * df[date_col].dt.hour / p)
+            df[f'cos_{p}'] = np.cos(2 * np.pi * df[date_col].dt.hour / p)
+            _log.debug(f"Added sin and cos features for period: {p}")
+        return df
+
+    def normalize_data(self, train_df: pd.DataFrame, test_df: pd.DataFrame,
+                       **kwargs) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        normalize_data の Docstring
+        
+        :param self: 説明
+        :param train_df: 説明
+        :type train_df: pd.DataFrame
+        :param test_df: 説明
+        :type test_df: pd.DataFrame
+        :param kwargs: 説明
+        :return: 説明
+        :rtype: Tuple[DataFrame, DataFrame]
+        """
+
+        train_cols = train_df.select_dtypes(include=[np.number]).columns
+        test_cols = test_df.select_dtypes(include=[np.number]).columns
+        common_cols = train_cols.intersection(test_cols)
+
+        method = kwargs.get("config", {}).get("method", "standard")
+        if method == "standard":
+            for col in common_cols:                
+                scaler = StandardScaler()
+                scaler.fit(train_df[[col]])
+                train_df[col] = scaler.transform(train_df[[col]])
+                test_df[col] = scaler.transform(test_df[[col]])
+            scaler = StandardScaler()
+            scaler.fit(train_df[[self.target_col]])
+            train_df[self.target_col] = scaler.transform(train_df[[self.target_col]])
+            _log.debug("Standard normalization applied")
+        else:
+            _log.warning(f"Normalization method '{method}' not recognized. No normalization applied.")
+        
+        return train_df, test_df

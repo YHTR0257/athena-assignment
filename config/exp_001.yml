@@ -2,7 +2,9 @@ experiment_name: "exp_001"
 preprocess:
   h1:
     add_features: ["date_features", "season", "lag_features"]
-    method: ["mstl", "lag", "moving_average"]
+    method: ["mstl", "lag", "moving_average", "sin_cos_features"]
+    sin_cos_features:
+      periods: [4, 12, 24, 168, 2160]
     mstl:
       general:
         iterate: 10
@@ -39,10 +41,11 @@ preprocess:
         windows: [3, 6, 12]
       LULL:
         windows: [3, 6, 12]
-    scale:
+    normalization:
       method: "standard"
   h2:
-    add_features: ["date_features", "season", "lag_features"]
+    add_features:
+      ["date_features", "season", "lag_features", "sin_cos_features"]
     method: ["mstl", "lag", "moving_average"]
     mstl:
       general:
