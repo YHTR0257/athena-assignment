@@ -1,5 +1,3 @@
-from logging import config
-from matplotlib.pylab import f
 import pandas as pd
 from typing import List, Tuple
 from pathlib import Path
@@ -23,9 +21,9 @@ class DataProcessor:
         _log.debug(f"DataProcessor initialized with data folder: {self.data_folder}")
         self.cols_to_use = ["OT", "HUFL", "HULL", "LUFL", "LULL", "MUFL", "MULL"]
     
-    def load_data(self, file_name: str) -> pd.DataFrame:
+    def load_data(self, file_name: str, **kwargs) -> pd.DataFrame:
         """
-        指定されたファイル名の CSV データを読み込み、DataFrame として返します。
+        指定されたファイル名の データを読み込み、DataFrame として返します。
 
         Args:
             file_name (str): 読み込む CSV ファイルの名前
@@ -33,10 +31,17 @@ class DataProcessor:
         Returns:
             pd.DataFrame: 読み込んだデータの DataFrame
         """
-        file_path = self.data_folder / file_name
+        data_folder = kwargs.get("data_folder", self.data_folder)
+        file_path = data_folder / file_name
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
-        return pd.read_csv(file_path)
+        suffix = file_path.suffix.lower()
+        if suffix == ".parquet":
+            return pd.read_parquet(file_path, engine='pyarrow')
+        elif suffix == ".csv":
+            return pd.read_csv(file_path)
+        else:
+            raise ValueError(f"Unsupported file format: {suffix}")
 
     def split_data(self, df: pd.DataFrame, date_col: str="date", **kwargs) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
@@ -154,8 +159,8 @@ class DataProcessor:
         """
         max_period = max(periods)
         for feature in self.cols_to_use:
-            train_values = train_df[feature].values
-            test_values = test_df[feature].values
+            train_values = train_df[feature].to_numpy()
+            test_values = test_df[feature].to_numpy()
             bridge_values = train_values[-max_period:]
             combined_values = np.concatenate([bridge_values, test_values])
 
@@ -169,7 +174,7 @@ class DataProcessor:
             _log.debug(f"Created lag features for {feature}")
         return train_df, test_df
 
-    def add_features(self, df: pd.DataFrame, features: List[str], **kwargs) -> pd.DataFrame:
+    def add_features(self, df: pd.DataFrame, features: List[str]) -> pd.DataFrame:
         """
         指定された特徴量を DataFrame に追加します。
 
@@ -277,6 +282,20 @@ class DataProcessor:
                     f"Failed to map seasonal pattern for period {period} to test_df. "
                     f"Some positions could not be mapped."
                 )
+
+        # Extrapolate trend to test_df using least squares linear fit
+        # Fit on the last max(periods) points of the trend
+        max_period = max(periods)
+        trend_values = trend_df.values
+        fit_segment = trend_values[-max_period:]
+        x_fit = np.arange(max_period)
+        slope, intercept = np.polyfit(x_fit, fit_segment, 1)
+        x_test = np.arange(max_period, max_period + len(test_df))
+        test_trend = slope * x_test + intercept
+        test_df[f'{prefix}trend'] = test_trend
+
+        # Fill residuals with 0 for test_df
+        test_df[f'{prefix}resid'] = 0.0
 
         _log.debug("MSTL decomposition completed and components added to DataFrame")
         return train_df, test_df
