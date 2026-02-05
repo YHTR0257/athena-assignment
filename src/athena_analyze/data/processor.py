@@ -192,8 +192,7 @@ class DataProcessor:
             df['month'] = dt.dt.month
             df['day'] = dt.dt.day
             df['weekday'] = dt.dt.weekday
-            df['yearmonth'] = dt.dt.to_period('M')
-            _log.debug("Added 'year', 'month', 'day', 'weekday', 'yearmonth' features")
+            _log.debug("Added 'year', 'month', 'day', 'weekday' features")
         if 'season' in features and 'month' in df.columns:
             df['season'] = df['month'] % 12 // 3 + 1
             _log.debug("Added 'season' feature")
@@ -287,8 +286,8 @@ class DataProcessor:
         # Fit on the last max(periods) points of the trend
         max_period = max(periods)
         trend_values = trend_df.values
-        fit_segment = trend_values[-max_period:]
-        x_fit = np.arange(max_period)
+        fit_segment = np.asarray(trend_values[-max_period:], dtype=np.float64)
+        x_fit = np.arange(max_period, dtype=np.float64)
         slope, intercept = np.polyfit(x_fit, fit_segment, 1)
         x_test = np.arange(max_period, max_period + len(test_df))
         test_trend = slope * x_test + intercept
