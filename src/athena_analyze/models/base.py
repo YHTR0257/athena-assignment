@@ -39,7 +39,7 @@ class Model(ABC):
         self.model = None  # 学習済みモデルを保存するための属性
 
     @abstractmethod
-    def train(self, X: Any, y: Any) -> None:
+    def train(self, *args: Any, **kwargs: Any) -> None:
         pass
 
     @abstractmethod

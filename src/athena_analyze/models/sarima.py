@@ -49,7 +49,7 @@ class SarimaModel(Model):
         """コンフィグのバリデーションを行う"""
         required_keys = ["seasonal", "y_col", "x_col", "m", "trace",
                          "error_action", "suppress_warnings", "max_p",
-                         "max_q", "max_P", "max_Q", "d", "D"]
+                         "max_q", "max_P", "max_Q"]
         for key in required_keys:
             if key not in self.config:
                 raise ValueError(f"Missing required config key: {key}")
