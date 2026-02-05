@@ -85,6 +85,57 @@ preprocess:
         windows: [3, 6, 12]
     scale:
       method: "standard"
-model:
+models:
+  general:
+    models: ["sarima", "light_gbm"]
+    random_seed: 42
+  sarima:
+    y_col: "OT"
+    x_col: "date"
+    seasonal: true
+    m: 24
+    trace: true
+    error_action: "ignore"
+    suppress_warnings: true
+    max_p: 3
+    max_q: 3
+    max_P: 2
+    max_Q: 2
+  light_gbm:
+    target_col: "OT"
+    num_boost_round: 1000
+    log_evaluation: 50
+    early_stopping_rounds: 50
+    # Optuna設定
+    n_trials: 100
+    n_jobs: -1
+    num_threads: -1
+    params:
+      # 基本設定
+      objective: "regression"
+      metric: "rmse"
+      random_state: 42
+      # モデルのハイパーパラメータ
+      boosting: "gbdt"
+      num_leaves:
+        range: [20, 200]
+      n_estimators: 1000
+      min_data_in_leaf: 20
+      # 過学習抑制
+      feature_fraction:
+        range: [0.5, 1.0]
+      bagging_fraction:
+        range: [0.5, 1.0]
+      bagging_freq:
+        range: [1, 10]
+      min_child_samples:
+        range: [5, 100]
+      learning_rate:
+        range: [0.005, 0.3]
+        log: true
+      lambda_l1: 0.1
+      lambda_l2: 0.1
+      # システム設定
+      verbosity: -1
 train:
 evaluation:
