@@ -145,18 +145,18 @@ class SarimaModel(Model):
             "bic": self.fitted_model.bic(),
         }
 
-    def evaluate(self, X: Any, y: Any) -> Dict[str, np.float64]:
+    def evaluate(self, X: Any, y: Any) -> Dict[str, float]:
         """
         モデルの性能評価を行う（MAPE: Mean Absolute Percentage Error）。
 
         :param X: 外生変数
         :param y: 実測値
         :return: MAPE（パーセント）
-        :rtype: Dict[str, np.float64]
+        :rtype: Dict[str, float]
         """
         if self.fitted_model is None:
             raise ValueError("Model must be trained before evaluation.")
-        
+
         if len(y) == 0:
             raise ValueError("Evaluation data is empty.")
         if X is None or len(X) != len(y):
@@ -170,7 +170,7 @@ class SarimaModel(Model):
         mape = self._calculate_mape(y[mask], predictions[mask])
         rmse = self._calculate_rmse(y, predictions)
         r2 = self._calculate_r2(y, predictions)
-        return {"MAPE": np.float64(mape), "RMSE": np.float64(rmse), "R2": np.float64(r2)}
+        return {"MAPE": mape, "RMSE": rmse, "R2": r2}
 
     def save_model(self, file_path: str) -> None:
         """

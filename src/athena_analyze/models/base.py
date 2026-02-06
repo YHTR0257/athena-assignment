@@ -46,34 +46,33 @@ class Model(ABC):
     def predict(self, X: Any) -> Any:
         pass
 
-    @staticmethod                                                                                                          
-    def _calculate_mape(y_true: np.ndarray, y_pred: np.ndarray) -> np.float64:                                                  
-        """MAPE (Mean Absolute Percentage Error) を計算"""                                                                 
-        mask = y_true != 0                                                                                                 
-        return np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100                                         
-                                                                                                                            
-    @staticmethod                                                                                                          
-    def _calculate_rmse(y_true: np.ndarray, y_pred: np.ndarray) -> np.float64:                                                  
-        """RMSE (Root Mean Squared Error) を計算"""                                                                        
-        return np.sqrt(np.mean((y_true - y_pred) ** 2))
-    
     @staticmethod
-    def _calculate_mae(y_true: np.ndarray, y_pred: np.ndarray) -> np.float64:
+    def _calculate_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+        """MAPE (Mean Absolute Percentage Error) を計算"""
+        mask = y_true != 0
+        return float(np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100)
+
+    @staticmethod
+    def _calculate_rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+        """RMSE (Root Mean Squared Error) を計算"""
+        return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
+
+    @staticmethod
+    def _calculate_mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:
         """MAE (Mean Absolute Error) を計算"""
-        return np.mean(np.abs(y_true - y_pred))
-    
+        return float(np.mean(np.abs(y_true - y_pred)))
+
     @staticmethod
-    def _calculate_r2(y_true: np.ndarray, y_pred: np.ndarray) -> np.float64:
+    def _calculate_r2(y_true: np.ndarray, y_pred: np.ndarray) -> float:
         """R2 スコアを計算"""
-        r2 = r2_score(y_true, y_pred)
-        return np.float64(r2)
+        return float(r2_score(y_true, y_pred))
     
     @abstractmethod
     def _validate_config(self) -> None:
         pass
 
     @abstractmethod
-    def evaluate(self, X: Any, y: Any) -> Dict[str, np.float64]:
+    def evaluate(self, X: Any, y: Any) -> Dict[str, float]:
         pass
 
     @abstractmethod

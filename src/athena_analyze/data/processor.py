@@ -117,22 +117,30 @@ class DataProcessor:
         if norm_cfg:
             _train_df, _test_df = self.normalize_data(_train_df, _test_df, config=norm_cfg)
 
+        # データ型の変換（メモリ軽量化）
+        dtype = kwargs.get("dtype", "float64")
+        if dtype == "float32":
+            _train_df = self._convert_float_dtype(_train_df, np.float32)
+            _test_df = self._convert_float_dtype(_test_df, np.float32)
+            _log.info("Converted numeric columns to float32 for memory optimization")
+
         _log.info("Data preprocessing completed")
         return _train_df, _test_df
 
     def create_moving_averages(self, train_df: pd.DataFrame, test_df: pd.DataFrame, **kwargs) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         指定された特徴量に対して移動平均特徴量を作成します。
-        
-        :param self: 説明
-        :param train_df: 説明
+        ターゲット変数（OT）は除外してデータリーケージを防ぎます。
+
+        :param train_df: トレーニングデータ
         :type train_df: pd.DataFrame
-        :param test_df: 説明
+        :param test_df: テストデータ
         :type test_df: pd.DataFrame
-        :return: 説明
+        :return: 移動平均特徴量が追加されたDataFrameのタプル
         :rtype: Tuple[DataFrame, DataFrame]
         """
-        features = self.cols_to_use
+        # ターゲット変数を除外してデータリーケージを防ぐ
+        features = [col for col in self.cols_to_use if col != self.target_col]
         ma_cfg = kwargs.get("config", {})
         for feature in features:
             window_sizes = ma_cfg.get(feature, {}).get("windows", [3, 6, 12])
@@ -148,6 +156,7 @@ class DataProcessor:
                     periods: List[int]) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         指定された特徴量に対してラグ特徴量を作成します。
+        ターゲット変数（OT）は除外してデータリーケージを防ぎます。
 
         Args:
             train_df (pd.DataFrame): トレーニングセットの DataFrame
@@ -158,7 +167,9 @@ class DataProcessor:
             Tuple[pd.DataFrame, pd.DataFrame]: ラグ特徴量が追加されたトレーニングセットとテストセットのタプル
         """
         max_period = max(periods)
-        for feature in self.cols_to_use:
+        # ターゲット変数を除外してデータリーケージを防ぐ
+        features = [col for col in self.cols_to_use if col != self.target_col]
+        for feature in features:
             train_values = train_df[feature].to_numpy()
             test_values = test_df[feature].to_numpy()
             bridge_values = train_values[-max_period:]
@@ -356,7 +367,7 @@ class DataProcessor:
 
         method = kwargs.get("config", {}).get("method", "standard")
         if method == "standard":
-            for col in common_cols:                
+            for col in common_cols:
                 scaler = StandardScaler()
                 scaler.fit(train_df[[col]])
                 train_df[col] = scaler.transform(train_df[[col]])
@@ -367,5 +378,21 @@ class DataProcessor:
             _log.debug("Standard normalization applied")
         else:
             _log.warning(f"Normalization method '{method}' not recognized. No normalization applied.")
-        
+
         return train_df, test_df
+
+    def _convert_float_dtype(self, df: pd.DataFrame, dtype: np.dtype) -> pd.DataFrame:
+        """
+        DataFrameの浮動小数点カラムを指定された型に変換します。
+
+        Args:
+            df (pd.DataFrame): 変換対象のDataFrame
+            dtype (np.dtype): 変換先の型（np.float32など）
+
+        Returns:
+            pd.DataFrame: 型変換後のDataFrame
+        """
+        float_cols = df.select_dtypes(include=[np.float64]).columns
+        for col in float_cols:
+            df[col] = df[col].astype(dtype)
+        return df

@@ -6,7 +6,7 @@ import optuna
 from .base import Model, ModelRegistry
 
 from utils.logging import setup_logging
-_log = setup_logging(__name__)
+_log = setup_logging()
 
 @ModelRegistry.register("light_gbm")
 class LightGBM(Model):
@@ -111,6 +111,7 @@ class LightGBM(Model):
             'verbosity': self.params.get('verbosity', -1),
             'boosting_type': self.boosting_type,
             'num_threads': self.num_threads,
+            'feature_pre_filter': False,
             'learning_rate': trial.suggest_float(
                 'learning_rate',
                 self.learning_rate['range'][0],
@@ -186,7 +187,7 @@ class LightGBM(Model):
             self.study.optimize(
                 lambda trial: self._objective(trial, train_set, valid_set),
                 n_trials=self.n_trials,
-                n_jobs=self.n_jobs,
+                n_jobs=1,
                 show_progress_bar=True
             )
 
@@ -242,7 +243,7 @@ class LightGBM(Model):
             raise ValueError("Model has not been trained yet. Call train() first.")
         return np.array(self.model.predict(X))
 
-    def evaluate(self, X: pd.DataFrame, y: pd.Series) -> Dict[str, np.float64]:
+    def evaluate(self, X: pd.DataFrame, y: pd.Series) -> Dict[str, float]:
         """
         モデルの性能評価を行う。MAPE, RMSE, MAE, R2を計算。
 
