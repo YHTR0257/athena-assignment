@@ -44,6 +44,7 @@ preprocess:
     normalization:
       method: "standard"
   h2:
+    dtype: "float32"
     add_features:
       ["date_features", "season", "lag_features", "sin_cos_features"]
     method: ["mstl", "lag", "moving_average"]
@@ -97,10 +98,10 @@ models:
     trace: true
     error_action: "ignore"
     suppress_warnings: true
-    max_p: 3
-    max_q: 3
-    max_P: 2
-    max_Q: 2
+    max_p: 2
+    max_q: 2
+    max_P: 1
+    max_Q: 1
   light_gbm:
     target_col: "OT"
     num_boost_round: 1000
