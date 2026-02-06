@@ -1,0 +1,331 @@
+import gc
+from datetime import datetime
+import pandas as pd
+from athena_analyze.data.processor import DataProcessor
+from athena_analyze.eda.visualize import plot_time_series
+from utils.logging import setup_logging
+from utils.config import load_config_section
+from pathlib import Path
+
+_LOG_FILE = str(Path(__file__).parent.parent / "logs" / "experiment.log")
+_log = setup_logging(log_file=_LOG_FILE)
+
+class ExperimentRunner:
+    def __init__(self, exp_name: str, root_dir: Path):
+        self.exp_name = exp_name
+        self.root_dir = root_dir
+        self.general_cfg_path = self.root_dir / "config/config.yml"
+        self.exp_cfg_path = self.root_dir / f"config/{exp_name}.yml"
+        self.data_cfg = load_config_section(self.general_cfg_path, "data")
+        raw_dir = self.data_cfg["raw"].replace("../", str(self.root_dir) + "/")
+        self.processor = DataProcessor(data_fol=raw_dir)
+        self.trained_models = []
+        self.evaluation_results = {}
+        self.model_infos = {}
+
+    def load_and_preprocess(self, ds_label):
+        pp_general_cfg = load_config_section(self.general_cfg_path, "preprocess")
+        pp_exp_cfg = load_config_section(self.exp_cfg_path, "preprocess")
+
+        train_name = f"train_{ds_label}"
+        test_name = f"test_{ds_label}"
+        cache_path = self.root_dir / f"data/experiment/{self.exp_name}/{train_name}.parquet"
+
+        if cache_path.exists():
+            _log.warning(f"Experiment data {train_name} already exists, loading from cache.")
+            train_df = self.processor.load_data(f"{self.exp_name}/{train_name}.parquet",
+                                                data_folder=self.root_dir / "data/experiment")
+            test_df = self.processor.load_data(f"{self.exp_name}/{test_name}.parquet",
+                                               data_folder=self.root_dir / "data/experiment")
+        else:
+            raw_df = self.processor.load_data(f"ETT{ds_label}.csv")
+            _log.info(f"Processing dataset {ds_label}")
+            pp_cfg = dict(**pp_general_cfg, **pp_exp_cfg[ds_label])
+            train_df, test_df = self.processor.preprocess_data(raw_df, **pp_cfg)
+
+            from utils.data_io import save_dataframe_to_parquet
+            data_cfg = load_config_section(self.general_cfg_path, "data")
+            exp_dir = data_cfg["experiment"].replace("../", str(self.root_dir) + "/")
+            data_cfg_abs = {**data_cfg, "experiment": exp_dir}
+            save_dataframe_to_parquet(train_df, f"{self.exp_name}/{train_name}.parquet", config=data_cfg_abs)
+            save_dataframe_to_parquet(test_df, f"{self.exp_name}/{test_name}.parquet", config=data_cfg_abs)
+
+        return train_df, test_df
+
+    def setup_models(self):
+        from athena_analyze.models.base import ModelRegistry
+
+        self.model_cfg = load_config_section(self.exp_cfg_path, "models")
+
+        self.registry = ModelRegistry()
+        self.registry.auto_discover()
+        self.registry.list_models()
+
+    def execute_training(self, train_df, test_df, ds_label):
+        each_model_cfg = [k for k in self.model_cfg.keys() if k in self.model_cfg["general"]["models"]]
+        self.trained_models = []
+
+        for model_name, each_cfg in zip(self.model_cfg["general"]["models"], each_model_cfg):
+            _log.info(f"Training model: {each_cfg} on {ds_label}")
+            model_cls = self.registry.get_model(model_name)
+            model = model_cls(config=self.model_cfg[each_cfg])
+
+            if each_cfg == "sarima":
+                model.train(train_df)
+            else:
+                target_col = self.model_cfg[each_cfg].get("target_col", "OT")
+                drop_cols = [target_col, "date"]
+                feature_cols = [c for c in train_df.columns if c not in drop_cols]
+
+                X_train = train_df[feature_cols]
+                y_train = train_df[target_col]
+                X_valid = test_df[feature_cols]
+                y_valid = test_df[target_col]
+
+                model.train(X_train, y_train, valid_data=X_valid, valid_label=y_valid)
+
+            self.trained_models.append((each_cfg, ds_label, model))
+
+        _log.info(f"Training complete for {ds_label}.")
+    
+    def get_model_info(self):
+        models_dir = self.root_dir / "models" / self.exp_name
+        models_dir.mkdir(parents=True, exist_ok=True)
+
+        for name, ds_label, model in self.trained_models:
+            if name == "sarima":
+                save_path = str(models_dir / f"{name}_{ds_label}.pkl")
+            else:
+                save_path = str(models_dir / f"{name}_{ds_label}.txt")
+
+            model.save_model(save_path)
+            info = model.get_info()
+            info['save_path'] = save_path
+
+            # モデル情報を保存
+            self.model_infos[(name, ds_label)] = info
+
+            _log.info(f"--- {name} ({ds_label}) ---")
+            _log.info(f"Model Type: {info['model_type']}")
+            if info.get('num_trees'):
+                _log.info(f"Num Trees: {info['num_trees']}")
+            if info.get('order'):
+                _log.info(f"Order: {info['order']}")
+                _log.info(f"Seasonal Order: {info['seasonal_order']}")
+                _log.info(f"AIC: {info['aic']:.4f}")
+            if info.get('best_params'):
+                _log.info(f"Best Params: {info['best_params']}")
+            if info.get('optuna_best_value'):
+                _log.info(f"Optuna Best RMSE: {info['optuna_best_value']:.4f}")
+            _log.info(f"Saved to: {save_path}")
+
+    def run_evaluation(self, test_df):
+        for name, ds_label, model in self.trained_models:
+            if name == "sarima":
+                x_col = self.model_cfg[name].get("x_col", "date")
+                y_col = self.model_cfg[name].get("y_col", "OT")
+                X_test = test_df[[x_col]]
+                y_test = test_df[y_col].values
+                eval_result = model.evaluate(X_test, y_test)
+            else:
+                target_col = self.model_cfg[name].get("target_col", "OT")
+                drop_cols = [target_col, "date"]
+                feature_cols = [c for c in test_df.columns if c not in drop_cols]
+                X_test = test_df[feature_cols]
+                y_test = test_df[target_col]
+                eval_result = model.evaluate(X_test, y_test)
+
+            # 評価結果を保存
+            self.evaluation_results[(name, ds_label)] = eval_result
+
+            _log.info(f"--- {name} ({ds_label}) ---")
+            for metric, value in eval_result.items():
+                _log.info(f"  {metric}: {value:.4f}")
+
+    def plot_results(self, test_df):
+        reports_dir = self.root_dir / "reports" / self.exp_name
+        reports_dir.mkdir(parents=True, exist_ok=True)
+
+        for name, ds_label, model in self.trained_models:
+            if name == "sarima":
+                x_col = self.model_cfg[name].get("x_col", "date")
+                y_col = self.model_cfg[name].get("y_col", "OT")
+                preds = model.predict(len(test_df), test_df[[x_col]])
+                actual = test_df[y_col].values
+            else:
+                target_col = self.model_cfg[name].get("target_col", "OT")
+                drop_cols = [target_col, "date"]
+                feature_cols = [c for c in test_df.columns if c not in drop_cols]
+                preds = model.predict(test_df[feature_cols])
+                actual = test_df[target_col].values
+
+            plot_df = pd.DataFrame({
+                "date": pd.to_datetime(test_df["date"]).values,
+                "actual": actual,
+                "predicted": preds,
+            })
+
+            fig = plot_time_series(
+                df=plot_df,
+                date_col="date",
+                value_cols=["actual", "predicted"],
+                figsize=(14, 5),
+            )
+            fig.suptitle(f"{name} ({ds_label})", fontsize=14, fontweight="bold", y=1.02)
+
+            save_path = reports_dir / f"{name}_{ds_label}.png"
+            fig.savefig(save_path, dpi=150, bbox_inches="tight")
+            _log.info(f"Plot saved to {save_path}")
+
+    def generate_report(self, ds_label: str):
+        """Markdownレポートを生成する"""
+        reports_dir = self.root_dir / "reports" / self.exp_name
+        reports_dir.mkdir(parents=True, exist_ok=True)
+
+        report_path = reports_dir / f"report_{ds_label}.md"
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        lines = [
+            f"# Experiment Report: {self.exp_name}",
+            "",
+            f"**Dataset**: {ds_label}",
+            f"**Generated**: {timestamp}",
+            "",
+            "---",
+            "",
+            "## Model Results",
+            "",
+        ]
+
+        # 各モデルの結果を追加
+        for name, label, _ in self.trained_models:
+            if label != ds_label:
+                continue
+
+            info = self.model_infos.get((name, label), {})
+            eval_result = self.evaluation_results.get((name, label), {})
+
+            lines.append(f"### {info.get('model_type', name)}")
+            lines.append("")
+
+            # モデル情報（収束結果）
+            lines.append("#### Model Configuration")
+            lines.append("")
+            if info.get('order'):
+                lines.append(f"- **Order (p, d, q)**: {info['order']}")
+                lines.append(f"- **Seasonal Order (P, D, Q, m)**: {info['seasonal_order']}")
+                lines.append(f"- **AIC**: {info['aic']:.4f}")
+                if info.get('bic'):
+                    lines.append(f"- **BIC**: {info['bic']:.4f}")
+            if info.get('num_trees'):
+                lines.append(f"- **Number of Trees**: {info['num_trees']}")
+            if info.get('best_params'):
+                lines.append("- **Best Parameters (Optuna)**:")
+                for param, value in info['best_params'].items():
+                    if isinstance(value, float):
+                        lines.append(f"  - {param}: {value:.6f}")
+                    else:
+                        lines.append(f"  - {param}: {value}")
+            if info.get('optuna_best_value'):
+                lines.append(f"- **Optuna Best RMSE**: {info['optuna_best_value']:.4f}")
+            if info.get('save_path'):
+                lines.append(f"- **Model Path**: `{info['save_path']}`")
+            lines.append("")
+
+            # 評価指標
+            lines.append("#### Evaluation Metrics")
+            lines.append("")
+            lines.append("| Metric | Value |")
+            lines.append("|--------|-------|")
+            for metric, value in eval_result.items():
+                lines.append(f"| {metric} | {value:.4f} |")
+            lines.append("")
+
+            # プロット画像への参照
+            plot_path = f"{name}_{ds_label}.png"
+            lines.append("#### Prediction Plot")
+            lines.append("")
+            lines.append(f"![{name} predictions]({plot_path})")
+            lines.append("")
+            lines.append("---")
+            lines.append("")
+
+        # ファイルに書き込み
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+
+        _log.info(f"Report saved to {report_path}")
+
+    def load_trained_model(self, model_name: str, ds_label: str):
+        """学習済みモデルを読み込む"""
+        models_dir = self.root_dir / "models" / self.exp_name
+
+        if model_name == "sarima":
+            model_path = models_dir / f"{model_name}_{ds_label}.pkl"
+        else:
+            model_path = models_dir / f"{model_name}_{ds_label}.txt"
+
+        if not model_path.exists():
+            return None
+
+        model_cls = self.registry.get_model(model_name)
+        model = model_cls(config=self.model_cfg[model_name])
+        model.load_model(str(model_path))
+        _log.info(f"Loaded trained model from {model_path}")
+        return model
+
+    def execute_training_or_load(self, train_df, test_df, ds_label):
+        """学習済みモデルがあれば読み込み、なければ学習する"""
+        each_model_cfg = [k for k in self.model_cfg.keys() if k in self.model_cfg["general"]["models"]]
+        self.trained_models = []
+
+        for model_name, each_cfg in zip(self.model_cfg["general"]["models"], each_model_cfg):
+            # 学習済みモデルの読み込みを試みる
+            model = self.load_trained_model(each_cfg, ds_label)
+
+            if model is not None:
+                _log.info(f"Using pre-trained model: {each_cfg} on {ds_label}")
+            else:
+                _log.info(f"Training model: {each_cfg} on {ds_label}")
+                model_cls = self.registry.get_model(model_name)
+                model = model_cls(config=self.model_cfg[each_cfg])
+
+                if each_cfg == "sarima":
+                    model.train(train_df)
+                else:
+                    target_col = self.model_cfg[each_cfg].get("target_col", "OT")
+                    drop_cols = [target_col, "date"]
+                    feature_cols = [c for c in train_df.columns if c not in drop_cols]
+
+                    X_train = train_df[feature_cols]
+                    y_train = train_df[target_col]
+                    X_valid = test_df[feature_cols]
+                    y_valid = test_df[target_col]
+
+                    model.train(X_train, y_train, valid_data=X_valid, valid_label=y_valid)
+
+            self.trained_models.append((each_cfg, ds_label, model))
+
+        _log.info(f"Model preparation complete for {ds_label}.")
+
+def main():
+    exp_name = "exp_001"
+    cwd = Path(__file__).parent.parent
+    runner = ExperimentRunner(exp_name, root_dir=cwd)
+    runner.setup_models()
+
+    dataset_labels = ["h1", "h2"]
+    for ds_label in dataset_labels:
+        _log.info(f"=== Processing dataset {ds_label} ===")
+        train_df, test_df = runner.load_and_preprocess(ds_label)
+        runner.execute_training_or_load(train_df, test_df, ds_label)
+        runner.get_model_info()
+        runner.run_evaluation(test_df)
+        runner.plot_results(test_df)
+        runner.generate_report(ds_label)
+        runner.trained_models.clear()
+        del train_df, test_df
+        gc.collect()
+
+if __name__ == "__main__":
+    main()

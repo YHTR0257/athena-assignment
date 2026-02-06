@@ -3,8 +3,8 @@
 ## 1. 基本情報
 
 - **レコード数**: 17,420
-- **カラム数**: 14
-- **カラム一覧**: date, HUFL, HULL, MUFL, MULL, LUFL, LULL, OT, year, month, day, weekday, yearmonth, season
+- **カラム数**: 8
+- **カラム一覧**: date, HUFL, HULL, MUFL, MULL, LUFL, LULL, OT
 
 ## 2. 時系列情報
 
@@ -54,12 +54,6 @@
 | LUFL | 0 | 0.00 |
 | LULL | 0 | 0.00 |
 | OT | 0 | 0.00 |
-| year | 0 | 0.00 |
-| month | 0 | 0.00 |
-| day | 0 | 0.00 |
-| weekday | 0 | 0.00 |
-| yearmonth | 0 | 0.00 |
-| season | 0 | 0.00 |
 
 ## 4. 数値カラムの統計量
 
@@ -74,25 +68,15 @@ min      -22.705999     -4.756000    -25.087999     -5.934000     -1.188000
 75%       11.788000      3.684000      8.635000      2.203000      3.625000   
 max       23.643999     10.114000     17.341000      7.747000      8.498000   
 
-               LULL            OT          year         month           day  \
-count  17420.000000  17420.000000  17420.000000  17420.000000  17420.000000   
-mean       0.856932     13.324672   2016.990126      6.529047     15.647761   
-std        0.599552      8.566946      0.705025      3.457602      8.768471   
-min       -1.371000     -4.080000   2016.000000      1.000000      1.000000   
-25%        0.670000      6.964000   2016.000000      4.000000      8.000000   
-50%        0.975000     11.396000   2017.000000      7.000000     16.000000   
-75%        1.218000     18.079000   2017.000000     10.000000     23.000000   
-max        3.046000     46.007000   2018.000000     12.000000     31.000000   
-
-            weekday        season  
+               LULL            OT  
 count  17420.000000  17420.000000  
-mean       3.001837      2.501263  
-std        2.002466      1.116935  
-min        0.000000      1.000000  
-25%        1.000000      2.000000  
-50%        3.000000      2.000000  
-75%        5.000000      4.000000  
-max        6.000000      4.000000  
+mean       0.856932     13.324672  
+std        0.599552      8.566946  
+min       -1.371000     -4.080000  
+25%        0.670000      6.964000  
+50%        0.975000     11.396000  
+75%        1.218000     18.079000  
+max        3.046000     46.007000  
 ```
 
 ### 数値カラムの時系列トレンド
@@ -106,34 +90,23 @@ max        6.000000      4.000000
 | LUFL | 4.20 | 3.72 | -11.59 |
 | LULL | 1.34 | 1.46 | +9.10 |
 | OT | 30.53 | 9.57 | -68.66 |
-| year | 2016.00 | 2018.00 | +0.10 |
-| month | 7.00 | 6.00 | -14.29 |
-| day | 1.00 | 26.00 | +2500.00 |
-| weekday | 4.00 | 1.00 | -75.00 |
-| season | 3.00 | 3.00 | +0.00 |
 
 ## 6. DataFrame Info
 
 ```
 <class 'pandas.DataFrame'>
 RangeIndex: 17420 entries, 0 to 17419
-Data columns (total 14 columns):
- #   Column     Non-Null Count  Dtype    
----  ------     --------------  -----    
- 0   date       17420 non-null  str      
- 1   HUFL       17420 non-null  float64  
- 2   HULL       17420 non-null  float64  
- 3   MUFL       17420 non-null  float64  
- 4   MULL       17420 non-null  float64  
- 5   LUFL       17420 non-null  float64  
- 6   LULL       17420 non-null  float64  
- 7   OT         17420 non-null  float64  
- 8   year       17420 non-null  int32    
- 9   month      17420 non-null  int32    
- 10  day        17420 non-null  int32    
- 11  weekday    17420 non-null  int32    
- 12  yearmonth  17420 non-null  period[M]
- 13  season     17420 non-null  int32    
-dtypes: float64(7), int32(5), period[M](1), str(1)
-memory usage: 1.5 MB
+Data columns (total 8 columns):
+ #   Column  Non-Null Count  Dtype  
+---  ------  --------------  -----  
+ 0   date    17420 non-null  str    
+ 1   HUFL    17420 non-null  float64
+ 2   HULL    17420 non-null  float64
+ 3   MUFL    17420 non-null  float64
+ 4   MULL    17420 non-null  float64
+ 5   LUFL    17420 non-null  float64
+ 6   LULL    17420 non-null  float64
+ 7   OT      17420 non-null  float64
+dtypes: float64(7), str(1)
+memory usage: 1.4 MB
 ```

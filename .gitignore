@@ -34,8 +34,7 @@ data/*.arrow
 *.onnx
 *.safetensors
 checkpoints/
-models/*.bin
-!models/.gitkeep
+models/
 
 # ========================================
 # Shared Resources

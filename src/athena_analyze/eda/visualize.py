@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # 非対話型バックエンド（GUI不要）
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
@@ -25,6 +27,8 @@ def plot_time_series(df:pd.DataFrame, date_col:str, value_cols:List[str], **kwar
     :rtype: Figure
     """
 
+    alpha = kwargs.get("alpha", 0.7)
+
     _log.debug(f"Plotting time series for columns: {value_cols} with date column: {date_col}")
 
     plot_df = df.copy()
@@ -35,7 +39,7 @@ def plot_time_series(df:pd.DataFrame, date_col:str, value_cols:List[str], **kwar
     fig, ax = plt.subplots(figsize=figsize)
 
     for col in value_cols:
-        ax.plot(plot_df.index, plot_df[col], label=col)
+        ax.plot(plot_df.index, plot_df[col], label=col, alpha=alpha)
     ax.set_xlabel(kwargs.get("xlabel", "Date"))
 
     fig.tight_layout()
