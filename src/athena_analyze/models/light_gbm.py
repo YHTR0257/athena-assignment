@@ -229,20 +229,17 @@ class LightGBM(Model):
             raise ValueError("Model has not been trained yet. Call train() first.")
         # LightGBMの予測結果はnumpy配列として返す
         return np.asarray(self.model.predict(X))
-    
-    def evaluate(self, X: pd.DataFrame, y: pd.Series) -> Dict[str, float]:
+
+    def evaluate(self, y_true: pd.Series, y_pred: pd.Series) -> Dict[str, float]:
         """
         モデルの性能評価を行う。MAPE, RMSE, MAE, R2を計算。
 
-        :param X: 評価用特徴量データ
-        :param y: 評価用ターゲットデータ
+        :param y_true: 評価用ターゲットデータの真値
+        :param y_pred: 評価用ターゲットデータの予測値
         :return: 評価指標の辞書
         """
         if self.model is None:
             raise ValueError("Model has not been trained yet. Call train() first.")
-
-        y_pred = self.predict(X)
-        y_true = np.asarray(y)
 
         # 評価メトリクスの呼び出し（base.pyのメソッドが自動的にxp.asarray()で変換）
         return {

@@ -1,11 +1,12 @@
 import gc
 from datetime import datetime
 import pandas as pd
-from athena_analyze.data.processor import DataProcessor, create_datasets
+from athena_analyze.data.processor import DataProcessor
 from athena_analyze.eda.visualize import plot_time_series
 from utils.logging import setup_logging
 from utils.config import load_config_section
 from pathlib import Path
+import click
 
 _LOG_FILE = str(Path(__file__).parent.parent / "logs" / "experiment.log")
 _log = setup_logging(log_file=_LOG_FILE)
@@ -18,7 +19,7 @@ class ExperimentRunner:
         self.exp_cfg_path = self.root_dir / f"config/{exp_name}.yml"
         self.data_cfg = load_config_section(self.general_cfg_path, "data")
         raw_dir = self.data_cfg["raw"].replace("../", str(self.root_dir) + "/")
-        self.processor = DataProcessor(data_fol=raw_dir)
+        self.processor = DataProcessor(data_folder=raw_dir)
         self.trained_models = []
         self.evaluation_results = {}
         self.model_infos = {}
@@ -72,15 +73,18 @@ class ExperimentRunner:
 
             if each_cfg == "sarima":
                 model.train(train_df)
-            else:
+            elif each_cfg == "light_gbm":
                 target_col = self.model_cfg[each_cfg].get("target_col", "OT")
-                drop_cols = [target_col, "date"]
+                target_trend_col = f"stl_{target_col}_trend"
+                drop_cols = [target_col, target_trend_col, "date"]
                 feature_cols = [c for c in train_df.columns if c not in drop_cols]
 
                 X_train = train_df[feature_cols]
-                y_train = train_df[target_col]
+                y_train = train_df[target_trend_col]
 
                 model.train(X_train, y_train)
+            else:
+                raise ValueError(f"Unsupported model type for training: {each_cfg}")
 
             self.trained_models.append((each_cfg, ds_label, model))
 
@@ -121,14 +125,21 @@ class ExperimentRunner:
         for name, ds_label, model in self.trained_models:
             if name == "sarima":
                 eval_result = model.evaluate(test_df)
-            else:
+            elif name == "light_gbm":
                 target_col = self.model_cfg[name].get("target_col", "OT")
-                drop_cols = [target_col, "date"]
+                target_trend_col = f"stl_{target_col}_trend"
+                drop_cols = [target_col, target_trend_col, "date"]
                 feature_cols = [c for c in test_df.columns if c not in drop_cols]
                 X_test = test_df[feature_cols]
-                y_test = test_df[target_col]
-                eval_result = model.evaluate(X_test, y_test)
-
+                pred_df = test_df[target_trend_col].copy()
+                X_test[target_trend_col]= model.predict(X_test)
+                stl_col = [c for c in test_df.columns if f"stl_{target_col}_" in c]
+                pred_df[target_col] = pred_df[stl_col].sum(axis=1)
+                self.pred_df = pred_df
+                eval_result = model.evaluate(X_test, pred_df[target_col])
+            else:
+                raise ValueError(f"Unsupported model type for evaluation: {name}")
+            
             # 評価結果を保存
             self.evaluation_results[(name, ds_label)] = eval_result
 
@@ -145,12 +156,15 @@ class ExperimentRunner:
                 y_col = self.model_cfg[name].get("y_col", "OT")
                 preds = model.predict(test_df)
                 actual = test_df[y_col].values
-            else:
+            elif name == "light_gbm":
                 target_col = self.model_cfg[name].get("target_col", "OT")
-                drop_cols = [target_col, "date"]
+                target_trend_col = f"stl_{target_col}_trend"
+                drop_cols = [target_col, target_trend_col, "date"]
                 feature_cols = [c for c in test_df.columns if c not in drop_cols]
                 preds = model.predict(test_df[feature_cols])
-                actual = test_df[target_col].values
+                actual = test_df[target_trend_col].values
+            else:
+                raise ValueError(f"Unsupported model type for plotting: {name}")
 
             plot_df = pd.DataFrame({
                 "date": pd.to_datetime(test_df["date"]).values,
@@ -307,8 +321,9 @@ class ExperimentRunner:
 
         _log.info(f"Model preparation complete for {ds_label}.")
 
-def main():
-    exp_name = "exp_003"
+@click.command()
+@click.option("--exp-name", default="exp_test", help="Experiment name")
+def main(exp_name: str):
     cwd = Path(__file__).parent.parent
     runner = ExperimentRunner(exp_name, root_dir=cwd)
     runner.setup_models()

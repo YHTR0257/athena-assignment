@@ -1,9 +1,11 @@
+from math import sqrt
 import pandas as pd
 from typing import List, Tuple
 from pathlib import Path
 import numpy as np
 from torch.utils.data import Dataset
 from utils.array_backend import xp
+from scipy.optimize import curve_fit
 
 from sklearn.discriminant_analysis import StandardScaler
 from statsmodels.tsa.seasonal import MSTL
@@ -17,8 +19,8 @@ class DataProcessor:
     DataProcessor の Docstring
     """
 
-    def __init__(self, data_fol:str):
-        self.data_folder = Path(data_fol)
+    def __init__(self, data_folder:str):
+        self.data_folder = Path(data_folder)
         self.target_col = "OT"
         _log.debug(f"DataProcessor initialized with data folder: {self.data_folder}")
         self.cols_to_use = ["OT", "HUFL", "HULL", "LUFL", "LULL", "MUFL", "MULL"]
@@ -258,14 +260,16 @@ class DataProcessor:
                 )
 
         # Add trend to train_df
-        train_df[f'{prefix}trend'] = trend_df
+        _log.debug(f"trend_df head: {trend_df.head()}")
+        train_df[f'{prefix}trend'] = trend_df.values
 
         # Add seasonal components to train_df
         for seasonal_col in seasonal_df.columns:
             train_df[f'{prefix}{seasonal_col}'] = seasonal_df[seasonal_col]
 
         # Add residuals to train_df
-        train_df[f'{prefix}resid'] = result.resid
+        resid_df = result.resid
+        train_df[f'{prefix}resid'] = resid_df.values
 
         # Build seasonal lookup arrays for each period
         seasonal_lookup = {}
@@ -300,14 +304,35 @@ class DataProcessor:
         max_period = max(periods)
         trend_values = trend_df.values
         fit_segment = np.asarray(trend_values[-max_period:], dtype=np.float64)
-        x_fit = np.arange(max_period, dtype=np.float64)
-        slope, intercept = np.polyfit(x_fit, fit_segment, 1)
-        x_test = np.arange(max_period, max_period + len(test_df))
-        test_trend = slope * x_test + intercept
-        test_df[f'{prefix}trend'] = test_trend
+        x_fit = np.arange(len(fit_segment), dtype=np.float64)
 
-        # Fill residuals with 0 for test_df
-        test_df[f'{prefix}resid'] = 0.0
+        def func(x, slope, intercept, amplitude, frequency, phase):
+            trend = slope * x + intercept
+            oscillation = amplitude * np.sin(2 * np.pi * frequency * x + phase)
+            return trend + oscillation
+
+        slope_guess, intercept_guess = np.polyfit(x_fit, fit_segment, 1)
+        residuals = fit_segment - (slope_guess * x_fit + intercept_guess)
+        amp_guess = np.std(residuals) * sqrt(2)
+        freq_guess = 1 / 8640
+        phase_guess = 0
+
+        p0 = [slope_guess, intercept_guess, amp_guess, freq_guess, phase_guess]
+        x_test = np.arange(max_period, max_period + len(test_df))
+        try:
+            # optimize_funcはパラメータ(popt)と共分散(pcov)を返します
+            popt, pcov = curve_fit(func, x_fit, fit_segment, p0=p0)
+            
+            # 4. 外挿 (x_fitの続きの値を入力)
+            # x_fitが0スタートなので、テストデータもそれに合わせる
+            x_test = np.arange(len(fit_segment), len(fit_segment) + len(test_df))
+            test_trend = func(x_test, *popt)
+
+        except RuntimeError:
+            _log.warning("フィッティング収束せず: 線形近似で代用します")
+            test_trend = slope_guess * np.arange(len(fit_segment), len(fit_segment) + len(test_df)) + intercept_guess
+
+        test_df[f'{prefix}trend'] = test_trend
 
         _log.debug("MSTL decomposition completed and components added to DataFrame")
         return train_df, test_df
@@ -339,12 +364,15 @@ class DataProcessor:
         :rtype: pd.DataFrame
         """
 
-        date_col = kwargs.get("date_col", "date")
+        date_col: str = kwargs.get("date_col", "date")
 
-        periods = kwargs.get("config", {}).get("periods", [24, 168, 2160])
+        periods: List[int] = kwargs.get("config", {}).get("periods", [24, 168, 2160])
+        seconds_in_hour = 3600
         for p in periods:
-            df[f'sin_{p}'] = np.sin(2 * np.pi * df[date_col].dt.hour / p)
-            df[f'cos_{p}'] = np.cos(2 * np.pi * df[date_col].dt.hour / p)
+            timestamp_sec = df[date_col].astype('int64') // 10**9
+            period_sec = p * seconds_in_hour
+            df[f'sin_{p}'] = np.sin(2 * np.pi * timestamp_sec / period_sec)
+            df[f'cos_{p}'] = np.cos(2 * np.pi * timestamp_sec / period_sec)
             _log.debug(f"Added sin and cos features for period: {p}")
         return df
 
