@@ -1,7 +1,7 @@
 import gc
 from datetime import datetime
 import pandas as pd
-from athena_analyze.data.processor import DataProcessor
+from athena_analyze.data.processor import DataProcessor, create_datasets
 from athena_analyze.eda.visualize import plot_time_series
 from utils.logging import setup_logging
 from utils.config import load_config_section
@@ -79,10 +79,8 @@ class ExperimentRunner:
 
                 X_train = train_df[feature_cols]
                 y_train = train_df[target_col]
-                X_valid = test_df[feature_cols]
-                y_valid = test_df[target_col]
 
-                model.train(X_train, y_train, valid_data=X_valid, valid_label=y_valid)
+                model.train(X_train, y_train)
 
             self.trained_models.append((each_cfg, ds_label, model))
 
@@ -122,11 +120,7 @@ class ExperimentRunner:
     def run_evaluation(self, test_df):
         for name, ds_label, model in self.trained_models:
             if name == "sarima":
-                x_col = self.model_cfg[name].get("x_col", "date")
-                y_col = self.model_cfg[name].get("y_col", "OT")
-                X_test = test_df[[x_col]]
-                y_test = test_df[y_col].values
-                eval_result = model.evaluate(X_test, y_test)
+                eval_result = model.evaluate(test_df)
             else:
                 target_col = self.model_cfg[name].get("target_col", "OT")
                 drop_cols = [target_col, "date"]
@@ -148,9 +142,8 @@ class ExperimentRunner:
 
         for name, ds_label, model in self.trained_models:
             if name == "sarima":
-                x_col = self.model_cfg[name].get("x_col", "date")
                 y_col = self.model_cfg[name].get("y_col", "OT")
-                preds = model.predict(len(test_df), test_df[[x_col]])
+                preds = model.predict(test_df)
                 actual = test_df[y_col].values
             else:
                 target_col = self.model_cfg[name].get("target_col", "OT")
@@ -176,6 +169,14 @@ class ExperimentRunner:
             save_path = reports_dir / f"{name}_{ds_label}.png"
             fig.savefig(save_path, dpi=150, bbox_inches="tight")
             _log.info(f"Plot saved to {save_path}")
+
+            # 予測データを保存
+            from utils.data_io import save_dataframe_to_parquet
+            data_cfg = load_config_section(self.general_cfg_path, "data")
+            exp_dir = data_cfg["experiment"].replace("../", str(self.root_dir) + "/")
+            data_cfg_abs = {**data_cfg, "experiment": exp_dir}
+            pred_filename = f"{self.exp_name}/predictions_{name}_{ds_label}.parquet"
+            save_dataframe_to_parquet(plot_df, pred_filename, config=data_cfg_abs)
 
     def generate_report(self, ds_label: str):
         """Markdownレポートを生成する"""
@@ -299,17 +300,15 @@ class ExperimentRunner:
 
                     X_train = train_df[feature_cols]
                     y_train = train_df[target_col]
-                    X_valid = test_df[feature_cols]
-                    y_valid = test_df[target_col]
 
-                    model.train(X_train, y_train, valid_data=X_valid, valid_label=y_valid)
+                    model.train(X_train, y_train)
 
             self.trained_models.append((each_cfg, ds_label, model))
 
         _log.info(f"Model preparation complete for {ds_label}.")
 
 def main():
-    exp_name = "exp_001"
+    exp_name = "exp_002"
     cwd = Path(__file__).parent.parent
     runner = ExperimentRunner(exp_name, root_dir=cwd)
     runner.setup_models()
