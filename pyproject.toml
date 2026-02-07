@@ -21,15 +21,16 @@ dependencies = [
     "pmdarima>=2.1.1",
     "lightgbm>=4.6.0",
     "optuna>=4.7.0",
-    "torch",
-    "torchvision",
-    "torchaudio",
+    "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "torch>=2.0.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "torchvision==0.17.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "torchvision>=0.15.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "torchaudio==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "torchaudio>=2.0.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
 ]
 
 [project.optional-dependencies]
-gpu = [
-    "cupy-cuda12x",
-]
+gpu = ["cupy-cuda12x"]
 
 [build-system]
 requires = ["hatchling"]
@@ -38,24 +39,19 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/athena_analyze", "src/utils"]
 
-[tool.uv]
-dev-dependencies = ["pytest", "ruff"]
+[dependency-groups]
+dev = ["pytest", "ruff"]
 
 # --- PyTorch GPU環境向けの専用ソース設定 ---
+# デフォルトはPyPI（CPU版）を使用
+# GPU版が必要な場合: uv sync --extra gpu --index pytorch-cu124
 
 [[tool.uv.index]]
 name = "pytorch-cu124"
 url = "https://download.pytorch.org/whl/cu124"
 explicit = true
 
-[tool.uv.sources]
-# extra == 'gpu' の時だけ、PyTorch公式のCUDA12.4対応版を取得する設定
-torch = [
-  { index = "pytorch-cu124", marker = "extra == 'gpu'" },
-]
-torchvision = [
-  { index = "pytorch-cu124", marker = "extra == 'gpu'" },
-]
-torchaudio = [
-  { index = "pytorch-cu124", marker = "extra == 'gpu'" },
-]
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
