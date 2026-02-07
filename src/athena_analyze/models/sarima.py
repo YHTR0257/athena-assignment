@@ -1,9 +1,11 @@
 from typing import Dict, Any
+import copy
 import pickle
-import numpy as np
 import pandas as pd
 from pathlib import Path
+import numpy as np
 import pmdarima as pm
+from utils.array_backend import xp
 from .base import Model, ModelRegistry
 
 from utils.logging import setup_logging
@@ -81,6 +83,8 @@ class SarimaModel(Model):
         :type train_data: pd.DataFrame
         """
         _log.info(f"Training SARIMA model with pmd_arima...")
+
+        _log.info(f"Train and Eval splited")
         y = train_data[self.y_col]
         x = train_data[self.x_col]
 
@@ -110,21 +114,38 @@ class SarimaModel(Model):
         _log.info(f"SARIMA model training completed.")
         
 
-    def predict(self, steps: int, exogenous: pd.DataFrame) -> Any:
+    def predict(self, test_data: pd.DataFrame) -> np.ndarray:
         """
-        学習済みモデルを用いて予測を行う。
+        ローリング予測（walk-forward）を行う。
+        1ステップずつ予測し、実績値でモデルを更新してから次を予測する。
 
-        :param steps: 予測するステップ数
-        :type steps: int
-        :param exogenous: 外生変数（オプション）
-        :type exogenous: pd.DataFrame
-        :return: 予測結果
+        注意: ARIMAのローリング予測は順次処理のため、GPU加速できません。
+        各予測が前のステップに依存し、バッチ化が不可能なためです。
+
+        :param test_data: テストデータ（y_colとx_colを含むDataFrame）
+        :type test_data: pd.DataFrame
+        :return: 予測結果の配列
+        :rtype: np.ndarray
         """
         if self.fitted_model is None:
             _log.error("Model is not trained yet. Call train() before predict().")
             raise ValueError("Model must be trained before prediction.")
-        forecast = self.fitted_model.predict(n_periods=steps, exogenous=exogenous)
-        return forecast
+
+        y_actual = test_data[self.y_col].values
+        x_exog = test_data[[self.x_col]].values
+        n_samples = len(test_data)
+
+        # 最適化: 事前にarray確保（リストappendより高速）
+        forecasts = np.empty(n_samples, dtype=np.float64)
+
+        for i in range(n_samples):
+            # pmdarimaのpredict()はnumpy配列を返す
+            # 最適化: 不要な型変換を削除し、直接アクセス
+            pred = self.fitted_model.predict(n_periods=1, exogenous=x_exog[i:i+1])
+            forecasts[i] = pred[0]
+            self.fitted_model.update(y_actual[i], exogenous=x_exog[i:i+1])
+
+        return forecasts
 
     def get_info(self) -> dict:
         """
@@ -145,27 +166,36 @@ class SarimaModel(Model):
             "bic": self.fitted_model.bic(),
         }
 
-    def evaluate(self, X: Any, y: Any) -> Dict[str, float]:
+    def evaluate(self, test_data: pd.DataFrame) -> Dict[str, float]:
         """
-        モデルの性能評価を行う（MAPE: Mean Absolute Percentage Error）。
+        ローリング予測を用いてモデルの性能評価を行う。
+        モデルのコピーを使用し、元のモデル状態は保持する。
 
-        :param X: 外生変数
-        :param y: 実測値
-        :return: MAPE（パーセント）
+        :param test_data: テストデータ（y_colとx_colを含むDataFrame）
+        :type test_data: pd.DataFrame
+        :return: 評価指標の辞書
         :rtype: Dict[str, float]
         """
         if self.fitted_model is None:
             raise ValueError("Model must be trained before evaluation.")
 
+        y = test_data[self.y_col].values
         if len(y) == 0:
             raise ValueError("Evaluation data is empty.")
-        if X is None or len(X) != len(y):
-            raise ValueError("Exogenous data X must be provided and match the length of y.")
 
-        predictions = self.fitted_model.predict(n_periods=len(y), exogenous=X)
+        # モデルのコピーを使用して元の状態を保持
+        original_model = self.fitted_model
+        self.fitted_model = copy.deepcopy(original_model)
+
+        predictions = self.predict(test_data)
+
+        # 元のモデルを復元
+        self.fitted_model = original_model
+
+        # 評価指標の計算（base.pyのメソッドがnumpy/cupy配列を自動変換）
         # ゼロ除算を避けるため、yがゼロの場合は除外
-        mask = y != 0
-        if not mask.any():
+        mask = np.asarray(y != 0)
+        if not np.any(mask):
             raise ValueError("All target values are zero, cannot compute MAPE.")
         mape = self._calculate_mape(y[mask], predictions[mask])
         rmse = self._calculate_rmse(y, predictions)
