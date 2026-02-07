@@ -1,0 +1,132 @@
+experiment_name: "exp_001"
+preprocess:
+  h1:
+    add_features: ["date_features", "season", "lag_features"]
+    method: ["mstl", "lag", "moving_average", "sin_cos_features"]
+    sin_cos_features:
+      periods: [24, 168]
+    mstl:
+      general:
+        iterate: 10
+        stl_kwargs:
+          robust: true
+      OT:
+        periods: [24, 72]
+      HUFL:
+        periods: [12, 24]
+      HULL:
+        periods: [12, 24]
+      MUFL:
+        periods: [12, 24]
+      MULL:
+        periods: [12, 24]
+      LUFL:
+        periods: [12, 24]
+      LULL:
+        periods: [12, 24]
+    lag:
+      periods: [6, 12, 24, 168]
+    moving_average:
+      OT:
+        windows: [3, 12, 24, 168, 720]
+      HUFL:
+        windows: [3, 12, 24, 168]
+      HULL:
+        windows: [3, 12, 24, 168, 720]
+      MUFL:
+        windows: [3, 72, 168, 720]
+      MULL:
+        windows: [3, 72, 168]
+      LUFL:
+        windows: [3, 168, 72]
+      LULL:
+        windows: [3, 72]
+    normalization:
+      method: "standard"
+  h2:
+    dtype: "float32"
+    add_features:
+      ["date_features", "season", "lag_features", "sin_cos_features"]
+    method: ["mstl", "lag", "moving_average"]
+    sin_cos_features:
+      periods: [24, 168, 2160, 8760]
+    mstl:
+      general:
+        iterate: 10
+        stl_kwargs:
+          robust: true
+      OT:
+        periods: [24, 72]
+      HUFL:
+        periods: [12, 72]
+      HULL:
+        periods: [12, 24, 72]
+      MUFL:
+        periods: [12, 24, 72]
+      MULL:
+        periods: [12, 24, 480]
+      LUFL:
+        periods: [12, 24, 720]
+      LULL:
+        periods: [12, 24]
+    lag:
+      periods: [6, 12, 24, 168]
+    moving_average:
+      OT:
+        windows: [3, 12]
+      HUFL:
+        windows: [3, 24, 48, 168]
+      HULL:
+        windows: [3, 24]
+      MUFL:
+        windows: [3, 12]
+      MULL:
+        windows: [3, 12, 24, 168, 720]
+      LUFL:
+        windows: [3, 12, 24, 168, 720]
+      LULL:
+        windows: [3, 12, 24, 168, 720]
+    scale:
+      method: "standard"
+models:
+  general:
+    models: ["light_gbm", "sarima"]
+    random_seed: 42
+  light_gbm:
+    target_col: "OT"
+    num_boost_round: 1000
+    log_evaluation: 50
+    early_stopping_rounds: 50
+    # Optuna設定
+    n_trials: 100
+    n_jobs: -1
+    num_threads: -1
+    params:
+      # 基本設定
+      objective: "regression"
+      metric: "rmse"
+      random_state: 42
+      # モデルのハイパーパラメータ
+      boosting: "gbdt"
+      num_leaves:
+        range: [20, 200]
+      n_estimators: 1000
+      min_data_in_leaf: 20
+      # 過学習抑制
+      feature_fraction:
+        range: [0.5, 1.0]
+      bagging_fraction:
+        range: [0.5, 1.0]
+      bagging_freq:
+        range: [1, 10]
+      min_child_samples:
+        range: [5, 100]
+      learning_rate:
+        range: [0.005, 0.3]
+        log: true
+      lambda_l1: 0.1
+      lambda_l2: 0.1
+      # システム設定
+      verbosity: -1
+train:
+evaluation:
