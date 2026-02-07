@@ -11,9 +11,9 @@ preprocess:
         stl_kwargs:
           robust: true
       OT:
-        periods: [24, 720, 2160]
+        periods: [24, 504, 720, 2160]
       HUFL:
-        periods: [12, 24, 48, 504]
+        periods: [12, 24, 48, 72]
       HULL:
         periods: [12, 24, 48, 504]
       MUFL:
@@ -21,7 +21,7 @@ preprocess:
       MULL:
         periods: [12, 24]
       LUFL:
-        periods: [12, 24, 48]
+        periods: [12, 24, 48, 720]
       LULL:
         periods: [12, 24]
     lag:
@@ -30,17 +30,17 @@ preprocess:
       OT:
         windows: [3, 12, 24, 168, 720]
       HUFL:
-        windows: [3, 12, 24, 168, 720]
+        windows: [3, 12, 24, 168]
       HULL:
         windows: [3, 12, 24, 168, 720]
       MUFL:
-        windows: [3, 12, 24, 168, 720]
+        windows: [3, 72, 168, 720]
       MULL:
-        windows: [3, 12, 24, 168, 720]
+        windows: [3, 72, 168]
       LUFL:
-        windows: [3, 12, 24, 168, 720]
+        windows: [3, 168, 720]
       LULL:
-        windows: [3, 12, 24, 168, 720]
+        windows: [3, 72]
     normalization:
       method: "standard"
   h2:
@@ -58,24 +58,24 @@ preprocess:
       HUFL:
         periods: [12, 24, 168, 2160]
       HULL:
-        periods: [12, 24]
+        periods: [12, 24, 504, 720]
       MUFL:
-        periods: [12, 24, 504]
+        periods: [12, 24, 504, 720]
       MULL:
-        periods: [12, 24]
+        periods: [12, 24, 480]
       LUFL:
-        periods: [12, 24]
+        periods: [12, 24, 720]
       LULL:
         periods: [12, 24]
     lag:
       periods: [6, 12, 24, 168]
     moving_average:
       OT:
-        windows: [3, 12, 24, 168, 720]
+        windows: [3, 12, 168, 720, 4800]
       HUFL:
-        windows: [3, 12, 24, 168, 720]
+        windows: [3, 24, 48, 168, 720]
       HULL:
-        windows: [3, 12, 24, 168, 720]
+        windows: [3, 24, 240, 168, 504]
       MUFL:
         windows: [3, 12, 24, 168, 720]
       MULL:
@@ -88,20 +88,8 @@ preprocess:
       method: "standard"
 models:
   general:
-    models: ["sarima", "light_gbm"]
+    models: ["light_gbm"]
     random_seed: 42
-  sarima:
-    y_col: "OT"
-    x_col: "date"
-    seasonal: true
-    m: 24
-    trace: true
-    error_action: "ignore"
-    suppress_warnings: true
-    max_p: 2
-    max_q: 2
-    max_P: 1
-    max_Q: 1
   light_gbm:
     target_col: "OT"
     num_boost_round: 1000

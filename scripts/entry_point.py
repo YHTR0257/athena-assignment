@@ -308,7 +308,7 @@ class ExperimentRunner:
         _log.info(f"Model preparation complete for {ds_label}.")
 
 def main():
-    exp_name = "exp_002"
+    exp_name = "exp_003"
     cwd = Path(__file__).parent.parent
     runner = ExperimentRunner(exp_name, root_dir=cwd)
     runner.setup_models()
