@@ -3,7 +3,7 @@ name = "athena-assignment"
 version = "0.1.0"
 description = ""
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "numpy>=1.26.4,<2.1.0",
     "pandas>=2.2.2",
@@ -21,6 +21,14 @@ dependencies = [
     "pmdarima>=2.1.1",
     "lightgbm>=4.6.0",
     "optuna>=4.7.0",
+    "torch",
+    "torchvision",
+    "torchaudio",
+]
+
+[project.optional-dependencies]
+gpu = [
+    "cupy-cuda12x",
 ]
 
 [build-system]
@@ -32,3 +40,22 @@ packages = ["src/athena_analyze", "src/utils"]
 
 [tool.uv]
 dev-dependencies = ["pytest", "ruff"]
+
+# --- PyTorch GPU環境向けの専用ソース設定 ---
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+# extra == 'gpu' の時だけ、PyTorch公式のCUDA12.4対応版を取得する設定
+torch = [
+  { index = "pytorch-cu124", marker = "extra == 'gpu'" },
+]
+torchvision = [
+  { index = "pytorch-cu124", marker = "extra == 'gpu'" },
+]
+torchaudio = [
+  { index = "pytorch-cu124", marker = "extra == 'gpu'" },
+]

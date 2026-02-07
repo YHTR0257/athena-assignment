@@ -156,8 +156,10 @@ class LightGBM(Model):
             ]
         )
 
-        preds = np.array(model.predict(valid_set.get_data()))
-        y_true = np.array(valid_set.get_label())
+        # LightGBMの返り値はnumpy配列なので、評価メトリクスに直接渡す
+        # base.pyのメソッドが自動的にxp.asarray()で変換する
+        preds = model.predict(valid_set.get_data())
+        y_true = valid_set.get_label()
         rmse = self._calculate_rmse(y_true, preds)
         return float(rmse)
 
@@ -165,70 +167,54 @@ class LightGBM(Model):
         self,
         train_data: pd.DataFrame,
         label: pd.Series,
-        valid_data: Optional[pd.DataFrame] = None,
-        valid_label: Optional[pd.Series] = None
     ) -> None:
         """
-        モデルの学習を行う。検証データがある場合はOptunaでハイパーパラメータチューニングを実施。
+        モデルの学習を行う。train_dataを8:2に分割し、Optunaでハイパーパラメータチューニングを実施。
 
         :param train_data: 学習用特徴量データ
         :param label: 学習用ターゲットデータ
-        :param valid_data: 検証用特徴量データ（オプション）
-        :param valid_label: 検証用ターゲットデータ（オプション）
         """
-        train_set = lgb.Dataset(train_data, label=label, free_raw_data=False)
+        split_idx = int(len(train_data) * 0.8)
+        t_data, v_data = train_data.iloc[:split_idx], train_data.iloc[split_idx:]
+        t_label, v_label = label.iloc[:split_idx], label.iloc[split_idx:]
 
-        if valid_data is not None and valid_label is not None:
-            valid_set = lgb.Dataset(valid_data, label=valid_label, reference=train_set, free_raw_data=False)
+        train_set = lgb.Dataset(t_data, label=t_label, free_raw_data=False)
+        valid_set = lgb.Dataset(v_data, label=v_label, reference=train_set, free_raw_data=False)
 
-            # Optunaでハイパーパラメータチューニング
-            optuna.logging.set_verbosity(optuna.logging.WARNING)
-            self.study = optuna.create_study(direction='minimize')
-            self.study.optimize(
-                lambda trial: self._objective(trial, train_set, valid_set),
-                n_trials=self.n_trials,
-                n_jobs=1,
-                show_progress_bar=True
-            )
+        # Optunaでハイパーパラメータチューニング
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        self.study = optuna.create_study(direction='minimize')
+        self.study.optimize(
+            lambda trial: self._objective(trial, train_set, valid_set),
+            n_trials=self.n_trials,
+            n_jobs=1,
+            show_progress_bar=True
+        )
 
-            self.best_params = self.study.best_params
-            _log.info(f"Optuna best params: {self.best_params}")
-            _log.info(f"Optuna best RMSE: {self.study.best_value}")
+        self.best_params = self.study.best_params
+        _log.info(f"Optuna best params: {self.best_params}")
+        _log.info(f"Optuna best RMSE: {self.study.best_value}")
 
-            # 最適パラメータで最終学習
-            final_params: Dict[str, Any] = {
-                'objective': self.objective,
-                'metric': self.params.get('metric', 'rmse'),
-                'verbosity': self.params.get('verbosity', -1),
-                'boosting_type': self.boosting_type,
-                'num_threads': self.num_threads,
-                **self.best_params
-            }
+        # 最適パラメータで最終学習
+        final_params: Dict[str, Any] = {
+            'objective': self.objective,
+            'metric': self.params.get('metric', 'rmse'),
+            'verbosity': self.params.get('verbosity', -1),
+            'boosting_type': self.boosting_type,
+            'num_threads': self.num_threads,
+            **self.best_params
+        }
 
-            self.model = lgb.train(
-                final_params,
-                train_set,
-                num_boost_round=self.num_boost_round,
-                valid_sets=[valid_set],
-                callbacks=[
-                    lgb.early_stopping(stopping_rounds=self.early_stopping_rounds),
-                    lgb.log_evaluation(self.log_evaluation)
-                ]
-            )
-        else:
-            # 検証データがない場合は固定パラメータで学習
-            train_params = {
-                **self.params,
-                'num_threads': self.num_threads,
-            }
-            self.model = lgb.train(
-                train_params,
-                train_set,
-                num_boost_round=self.num_boost_round,
-                callbacks=[
-                    lgb.log_evaluation(self.log_evaluation)
-                ]
-            )
+        self.model = lgb.train(
+            final_params,
+            train_set,
+            num_boost_round=self.num_boost_round,
+            valid_sets=[valid_set],
+            callbacks=[
+                lgb.early_stopping(stopping_rounds=self.early_stopping_rounds),
+                lgb.log_evaluation(self.log_evaluation)
+            ]
+        )
 
         _log.info("LightGBM model trained successfully.")
     
@@ -241,8 +227,9 @@ class LightGBM(Model):
         """
         if self.model is None:
             raise ValueError("Model has not been trained yet. Call train() first.")
-        return np.array(self.model.predict(X))
-
+        # LightGBMの予測結果はnumpy配列として返す
+        return np.asarray(self.model.predict(X))
+    
     def evaluate(self, X: pd.DataFrame, y: pd.Series) -> Dict[str, float]:
         """
         モデルの性能評価を行う。MAPE, RMSE, MAE, R2を計算。
@@ -255,8 +242,9 @@ class LightGBM(Model):
             raise ValueError("Model has not been trained yet. Call train() first.")
 
         y_pred = self.predict(X)
-        y_true = np.array(y)
+        y_true = np.asarray(y)
 
+        # 評価メトリクスの呼び出し（base.pyのメソッドが自動的にxp.asarray()で変換）
         return {
             'mape': self._calculate_mape(y_true, y_pred),
             'rmse': self._calculate_rmse(y_true, y_pred),

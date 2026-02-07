@@ -2,6 +2,8 @@ import pandas as pd
 from typing import List, Tuple
 from pathlib import Path
 import numpy as np
+from torch.utils.data import Dataset
+from utils.array_backend import xp
 
 from sklearn.discriminant_analysis import StandardScaler
 from statsmodels.tsa.seasonal import MSTL
@@ -396,3 +398,116 @@ class DataProcessor:
         for col in float_cols:
             df[col] = df[col].astype(dtype)
         return df
+
+
+class TimeSeriesDataset(Dataset):
+    """
+    時系列データのPyTorchデータセットクラス
+    """
+
+    def __init__(self, X: xp.ndarray, y: xp.ndarray):
+        """
+        Docstring for __init__
+        
+        :param self: Description
+        :param X: Description
+        :type X: xp.ndarray
+        :param y: Description
+        :type y: xp.ndarray
+        """
+        self.X = X
+        self.y = y
+    
+    def __len__(self) -> int:
+        return len(self.X)
+
+    def __getitem__(self, idx: int) -> Tuple[xp.ndarray, xp.ndarray]:
+        return self.X[idx], self.y[idx]
+
+def create_sliding_window_dataset(df: pd.DataFrame, windows_size: int,
+                                  horizon: int, stride: int) -> Tuple[xp.ndarray, xp.ndarray]:
+    """
+    スライディングウィンドウを使用して時系列データセットを作成します。
+    
+    :param df: Description
+    :type df: pd.DataFrame
+    :param windows_size: Description
+    :type windows_size: int
+    :param horizon: Description
+    :type horizon: int
+    :param stride: Description
+    :type stride: int
+    :return: Description
+    :rtype: Tuple[Any, Any]
+    """
+    data = df.values
+    n_samples = (len(data) - windows_size - horizon) // stride + 1
+
+    X_list = []
+    y_list = []
+
+    for i in range(n_samples):
+        start_idx = i * stride
+        end_idx = start_idx + windows_size
+        target_end_idx = end_idx + horizon
+
+        if target_end_idx <= len(data):
+            X_list.append(data[start_idx:end_idx])
+            y_list.append(data[end_idx:target_end_idx])
+    
+    X = xp.array(X_list)
+    y = xp.array(y_list)
+
+    return X, y
+
+def split_train_eval(
+        X: xp.ndarray, y: xp.ndarray,
+        train_ratio: float=0.8) -> Tuple[xp.ndarray, xp.ndarray, xp.ndarray, xp.ndarray]:
+    """
+    トレーニングセットと評価セットにデータを分割します。
+    """
+    n_samples = len(X)
+    split_idx = int(n_samples * train_ratio)
+
+    X_train, y_train = X[:split_idx], y[:split_idx]
+    X_eval, y_eval = X[split_idx:], y[split_idx:]
+
+    return X_train, y_train, X_eval, y_eval
+
+def create_datasets(
+    df: pd.DataFrame, window_size: int,
+    horizon: int, stride: int,
+    train_ratio: float=0.8
+) -> Tuple[TimeSeriesDataset, TimeSeriesDataset]:
+    """
+    Docstring for create_datasets
+    
+    :param df: Description
+    :type df: pd.DataFrame
+    :param window_size: Description
+    :type window_size: int
+    :param horizon: Description
+    :type horizon: int
+    :param stride: Description
+    :type stride: int
+    :param train_ratio: Description
+    :type train_ratio: float
+    :return: Description
+    :rtype: Tuple[TimeSeriesDataset, TimeSeriesDataset]
+    """
+    X, y = create_sliding_window_dataset(
+        df, windows_size=window_size,
+        horizon=horizon, stride=stride
+    )
+
+    X_train, y_train, X_eval, y_eval = split_train_eval(
+        X, y, train_ratio=train_ratio
+    )
+
+    train_dataset = TimeSeriesDataset(X_train, y_train)
+    eval_dataset = TimeSeriesDataset(X_eval, y_eval)
+
+    _log.debug(f"Created datasets with {len(train_dataset)} training samples and {len(eval_dataset)} evaluation samples")
+    _log.debug(f"Each sample shape: X={X_train.shape[1:]}, y={y_train.shape[1:]}")
+
+    return train_dataset, eval_dataset

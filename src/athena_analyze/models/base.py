@@ -3,18 +3,16 @@
 ここでは、複数の回帰モデルを定義し、選択できるようにします。パラメータの保存にも対応させます。
 """
 
-from functools import wraps
-from argon2 import Type
-import numpy as np
-from pydantic import BaseModel, Field
-from typing import Callable, Union, Literal, Any, Dict, Type, List
-from sklearn.metrics import r2_score, f1_score, mean_absolute_error, mean_squared_error
-from enum import Enum
+from typing import Callable, Union, Any, Dict, Type, List
+from sklearn.metrics import r2_score
+from torch.utils.data import Dataset
 from abc import ABC, abstractmethod
 import importlib
 import pkgutil
 from pathlib import Path
+import numpy as np
 
+from utils.array_backend import xp
 from utils.logging import setup_logging
 _log = setup_logging()
 
@@ -47,25 +45,33 @@ class Model(ABC):
         pass
 
     @staticmethod
-    def _calculate_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    def _calculate_mape(y_true: Union[np.ndarray, Any], y_pred: Union[np.ndarray, Any]) -> float:
         """MAPE (Mean Absolute Percentage Error) を計算"""
-        mask = y_true != 0
-        return float(np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100)
+        y_true_xp = xp.asarray(y_true)
+        y_pred_xp = xp.asarray(y_pred)
+        mask = y_true_xp != 0
+        return float(xp.mean(xp.abs((y_true_xp[mask] - y_pred_xp[mask]) / y_true_xp[mask])) * 100)
 
     @staticmethod
-    def _calculate_rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    def _calculate_rmse(y_true: Union[np.ndarray, Any], y_pred: Union[np.ndarray, Any]) -> float:
         """RMSE (Root Mean Squared Error) を計算"""
-        return float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
+        y_true_xp = xp.asarray(y_true)
+        y_pred_xp = xp.asarray(y_pred)
+        return float(xp.sqrt(xp.mean((y_true_xp - y_pred_xp) ** 2)))
 
     @staticmethod
-    def _calculate_mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    def _calculate_mae(y_true: Union[np.ndarray, Any], y_pred: Union[np.ndarray, Any]) -> float:
         """MAE (Mean Absolute Error) を計算"""
-        return float(np.mean(np.abs(y_true - y_pred)))
+        y_true_xp = xp.asarray(y_true)
+        y_pred_xp = xp.asarray(y_pred)
+        return float(xp.mean(xp.abs(y_true_xp - y_pred_xp)))
 
     @staticmethod
-    def _calculate_r2(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-        """R2 スコアを計算"""
-        return float(r2_score(y_true, y_pred))
+    def _calculate_r2(y_true: Union[np.ndarray, Any], y_pred: Union[np.ndarray, Any]) -> float:
+        """R2 スコアを計算（sklearnを使用するためnumpy配列に変換）"""
+        y_true_np = np.asarray(y_true)
+        y_pred_np = np.asarray(y_pred)
+        return float(r2_score(y_true_np, y_pred_np))
     
     @abstractmethod
     def _validate_config(self) -> None:
