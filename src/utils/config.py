@@ -28,10 +28,10 @@ def load_config(config_path: Union[str, Path]) -> dict:
         with open(path, "rb") as f:
             return tomllib.load(f)
     elif suffix == ".json":
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     elif suffix == ".yaml" or suffix == ".yml":
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
     else:
         raise ValueError(
