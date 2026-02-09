@@ -6,6 +6,7 @@ import numpy as np
 from torch.utils.data import Dataset
 from utils.array_backend import xp
 from scipy.optimize import curve_fit
+import joblib
 
 from sklearn.discriminant_analysis import StandardScaler
 from statsmodels.tsa.seasonal import MSTL
@@ -229,35 +230,42 @@ class DataProcessor:
         Returns:
             Tuple[pd.DataFrame, pd.DataFrame]: 分解成分が追加されたトレーニングセットとテストセットのタプル
         """
+        _log.info("Starting MSTL decomposition")
         prefix = kwargs.get("prefix", "")
         cfg = kwargs.get("config", {})
         periods = cfg.get("periods", [])
 
         if not periods:
             raise ValueError("MSTL decomposition requires 'periods' in config")
+        if target_col not in train_df.columns:
+            raise KeyError(f"Target column '{target_col}' not found in train_df")
 
         _log.debug(f"Running MSTL decomposition on column: {target_col} with config: {cfg}")
-        mstl = MSTL(train_df[target_col], **cfg)
-        result = mstl.fit()
-        seasonal_df = result.seasonal
-        trend_df = result.trend
 
-        # Validate seasonal_df structure
-        if not isinstance(seasonal_df, pd.DataFrame):
-            raise ValueError(
-                f"MSTL returned Series instead of DataFrame. "
-                f"Expected DataFrame with columns for periods {periods}"
-            )
-
-        # Validate all expected seasonal columns exist
-        for period in periods:
-            col_n = f'seasonal_{period}'
-            if col_n not in seasonal_df.columns:
-                raise KeyError(
-                    f"Expected column '{col_n}' not found in MSTL result. "
-                    f"Available columns: {list(seasonal_df.columns)}. "
-                    f"Check if 'periods' config matches MSTL output."
+        def _run_mstl(series: pd.Series, **kwargs):
+            config = kwargs.get("config", {})
+            mstl = MSTL(series, **config)
+            result = mstl.fit()
+            seasonal_df = result.seasonal
+            trend_df = result.trend
+            resid_df = result.resid
+            if not isinstance(seasonal_df, pd.DataFrame):
+                raise ValueError(
+                    f"MSTL returned Series instead of DataFrame. "
+                    f"Expected DataFrame with columns for periods {periods}"
                 )
+            # Validate all expected seasonal columns exist
+            for period in periods:
+                col_n = f'seasonal_{period}'
+                if col_n not in seasonal_df.columns:
+                    raise KeyError(
+                        f"Expected column '{col_n}' not found in MSTL result. "
+                        f"Available columns: {list(seasonal_df.columns)}. "
+                        f"Check if 'periods' config matches MSTL output."
+                    )
+            return result, seasonal_df, trend_df, resid_df
+        
+        result, seasonal_df, trend_df, resid_df = _run_mstl(train_df[target_col], config=cfg)
 
         # Add trend to train_df
         _log.debug(f"trend_df head: {trend_df.head()}")
@@ -268,8 +276,9 @@ class DataProcessor:
             train_df[f'{prefix}{seasonal_col}'] = seasonal_df[seasonal_col]
 
         # Add residuals to train_df
-        resid_df = result.resid
         train_df[f'{prefix}resid'] = resid_df.values
+        if target_col != self.target_col:
+            test_df[f"{prefix}resid"] = 0.0  # テストデータの残差は0で初期化
 
         # Build seasonal lookup arrays for each period
         seasonal_lookup = {}
@@ -402,6 +411,9 @@ class DataProcessor:
                 scaler.fit(train_df[[col]])
                 train_df[col] = scaler.transform(train_df[[col]])
                 test_df[col] = scaler.transform(test_df[[col]])
+                if self.target_col in col:
+                    path = self.data_folder / f'scaler_{col}.pkl'
+                    joblib.dump(scaler, path)
             scaler = StandardScaler()
             scaler.fit(train_df[[self.target_col]])
             train_df[self.target_col] = scaler.transform(train_df[[self.target_col]])
