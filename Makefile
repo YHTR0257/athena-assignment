@@ -10,4 +10,10 @@ sync:
 
 sync-gpu:
 	uv sync --extra gpu
-	uv pip install --index-url https://download.pytorch.org/whl/cu124 --force-reinstall --no-deps torch torchvision torchaudio
+	uv pip install \
+		--index-url https://download.pytorch.org/whl/cu124 \
+		--force-reinstall \
+		--no-deps \
+		"torch==2.6.0" \
+		"torchvision==0.21.0" \
+		"torchaudio==2.6.0"

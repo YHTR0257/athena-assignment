@@ -34,7 +34,7 @@ data/*.arrow
 *.onnx
 *.safetensors
 checkpoints/
-models/
+models/exp*/
 
 # ========================================
 # Shared Resources
