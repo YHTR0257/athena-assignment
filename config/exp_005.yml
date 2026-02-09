@@ -1,0 +1,117 @@
+experiment_name: "exp_005"
+preprocess:
+  h1:
+    add_features: ["date_features", "season", "lag_features"]
+    method: ["mstl", "lag", "moving_average", "sin_cos_features"]
+    sin_cos_features:
+      periods: [24, 168, 2160, 8760]
+    mstl:
+      general:
+        iterate: 10
+        stl_kwargs:
+          robust: true
+      OT:
+        periods: [24, 504, 720, 2160]
+      HUFL:
+        periods: [12, 24, 48, 72]
+      HULL:
+        periods: [12, 24, 48, 504]
+      MUFL:
+        periods: [12, 24, 504]
+      MULL:
+        periods: [12, 24]
+      LUFL:
+        periods: [12, 24, 48, 720]
+      LULL:
+        periods: [12, 24]
+    lag:
+      periods: [6, 12, 24, 168]
+    moving_average:
+      OT:
+        windows: [3, 12, 24, 168, 720]
+      HUFL:
+        windows: [3, 12, 24, 168]
+      HULL:
+        windows: [3, 12, 24, 168, 720]
+      MUFL:
+        windows: [3, 72, 168, 720]
+      MULL:
+        windows: [3, 72, 168]
+      LUFL:
+        windows: [3, 168, 720]
+      LULL:
+        windows: [3, 72]
+    normalization:
+      method: "standard"
+  h2:
+    dtype: "float32"
+    add_features:
+      ["date_features", "season", "lag_features", "sin_cos_features"]
+    method: ["mstl", "lag", "moving_average"]
+    sin_cos_features:
+      periods: [24, 168, 2160, 8760]
+    mstl:
+      general:
+        iterate: 10
+        stl_kwargs:
+          robust: true
+      OT:
+        periods: [24, 336, 504, 2160]
+      HUFL:
+        periods: [12, 24, 168, 2160]
+      HULL:
+        periods: [12, 24, 504, 720]
+      MUFL:
+        periods: [12, 24, 504, 720]
+      MULL:
+        periods: [12, 24, 480]
+      LUFL:
+        periods: [12, 24, 720]
+      LULL:
+        periods: [12, 24]
+    lag:
+      periods: [6, 12, 24, 168]
+    moving_average:
+      OT:
+        windows: [3, 12, 168, 720, 4800]
+      HUFL:
+        windows: [3, 24, 48, 168]
+      HULL:
+        windows: [3, 24, 240, 168, 504]
+      MUFL:
+        windows: [3, 12, 24, 168, 720]
+      MULL:
+        windows: [3, 12, 24, 168, 720]
+      LUFL:
+        windows: [3, 12, 24, 168, 720]
+      LULL:
+        windows: [3, 12, 24, 168, 720]
+    scale:
+      method: "standard"
+models:
+  general:
+    models: ["tft"]
+    random_seed: 42
+  tft:
+    target_col: "OT"
+    input_chunk_length: 336
+    output_chunk_length: 168
+    max_epochs: 30
+    batch_size: 32
+    random_state: 42
+    # Optuna設定
+    n_trials: 10
+    params:
+      hidden_size:
+        range: [48, 96]
+      lstm_layers:
+        range: [1, 2]
+      num_attention_heads:
+        range: [2, 4]
+      dropout:
+        range: [0.1, 0.2]
+      learning_rate:
+        range: [0.0005, 0.005]
+        log: true
+train:
+evaluation:

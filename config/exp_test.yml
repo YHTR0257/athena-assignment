@@ -90,43 +90,28 @@ preprocess:
       method: "standard"
 models:
   general:
-    models: ["light_gbm", "sarima"]
+    models: ["tft"]
     random_seed: 42
-  light_gbm:
+  tft:
     target_col: "OT"
-    num_boost_round: 1000
-    log_evaluation: 50
-    early_stopping_rounds: 50
-    # Optuna設定
-    n_trials: 100
-    n_jobs: -1
-    num_threads: -1
+    input_chunk_length: 72
+    output_chunk_length: 24
+    max_epochs: 10
+    batch_size: 32
+    random_state: 42
+    # Optuna設定（テスト用に少なめ）
+    n_trials: 3
     params:
-      # 基本設定
-      objective: "regression"
-      metric: "rmse"
-      random_state: 42
-      # モデルのハイパーパラメータ
-      boosting: "gbdt"
-      num_leaves:
-        range: [20, 200]
-      n_estimators: 1000
-      min_data_in_leaf: 20
-      # 過学習抑制
-      feature_fraction:
-        range: [0.5, 1.0]
-      bagging_fraction:
-        range: [0.5, 1.0]
-      bagging_freq:
-        range: [1, 10]
-      min_child_samples:
-        range: [5, 100]
+      hidden_size:
+        range: [16, 64]
+      lstm_layers:
+        range: [1, 2]
+      num_attention_heads:
+        range: [1, 4]
+      dropout:
+        range: [0.05, 0.3]
       learning_rate:
-        range: [0.005, 0.3]
+        range: [0.0001, 0.01]
         log: true
-      lambda_l1: 0.1
-      lambda_l2: 0.1
-      # システム設定
-      verbosity: -1
 train:
 evaluation:
