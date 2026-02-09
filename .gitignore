@@ -257,6 +257,7 @@ cython_debug/
 # Local scripts
 *.local.sh
 *.local.py
+.DS_Store
 
 # vscode settings
 .vscode/settings.json
