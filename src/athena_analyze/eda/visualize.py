@@ -28,6 +28,8 @@ def plot_time_series(df:pd.DataFrame, date_col:str, value_cols:List[str], **kwar
     """
 
     alpha = kwargs.get("alpha", 0.7)
+    h_lines: List[float] = kwargs.get("h_lines", [])
+    v_lines: List[float] = kwargs.get("v_lines", [])
 
     _log.debug(f"Plotting time series for columns: {value_cols} with date column: {date_col}")
 
@@ -41,6 +43,12 @@ def plot_time_series(df:pd.DataFrame, date_col:str, value_cols:List[str], **kwar
     for col in value_cols:
         ax.plot(plot_df.index, plot_df[col], label=col, alpha=alpha)
     ax.set_xlabel(kwargs.get("xlabel", "Date"))
+    if len(h_lines) > 0:
+        for h in h_lines:
+            ax.axhline(y=h, color='gray', linestyle='--', alpha=0.5)
+    if len(v_lines) > 0:
+        for v in v_lines:
+            ax.axvline(x=v, color='gray', linestyle='--', alpha=0.5)
 
     fig.tight_layout()
     ax.legend()
@@ -390,3 +398,84 @@ def plot_pacf(df: pd.DataFrame, **kwargs) -> Tuple[Figure, Axes]:
 
     fig.tight_layout()
     return fig, ax
+
+def plot_pairplot(df: pd.DataFrame, **kwargs) -> Figure:
+    """
+    ペアプロットを作成。各変数間の関係性を視覚化。
+
+    :param df: データフレーム
+    :type df: pd.DataFrame
+    :param kwargs: 追加のプロットオプション
+        - figsize: 図のサイズ (default: (10, 10))
+        - vars: プロットする変数のリスト (default: 全ての数値列)
+    :return: 図オブジェクト
+    :rtype: Figure
+    :raises ValueError: データフレームが空、または数値列が存在しない場合
+    :raises KeyError: 指定された変数がデータフレームに存在しない場合
+    """
+
+    import seaborn as sns
+
+    figsize = kwargs.get("figsize", (10, 10))
+    vars = kwargs.get("vars", None)
+
+    # バリデーション: 空のDataFrame
+    if df.empty:
+        _log.error("Input DataFrame is empty")
+        raise ValueError("Input DataFrame is empty")
+
+    _log.debug(f"Creating pairplot for variables: {vars if vars else 'all numeric columns'}")
+
+    # 変数の選択
+    if vars is None:
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        if not numeric_cols:
+            _log.error("No numeric columns found in DataFrame")
+            raise ValueError("No numeric columns found in DataFrame")
+        vars = numeric_cols
+        _log.debug(f"Auto-selected numeric columns: {vars}")
+    else:
+        # バリデーション: 指定された変数が存在するか
+        missing_vars = [v for v in vars if v not in df.columns]
+        if missing_vars:
+            _log.error(f"Variables not found in DataFrame: {missing_vars}")
+            raise KeyError(f"Variables not found in DataFrame: {missing_vars}")
+        
+        # バリデーション: 指定された変数が数値型か
+        non_numeric = [v for v in vars if not pd.api.types.is_numeric_dtype(df[v])]
+        if non_numeric:
+            _log.warning(f"Non-numeric columns will be excluded: {non_numeric}")
+            vars = [v for v in vars if v not in non_numeric]
+            if not vars:
+                _log.error("No numeric columns remaining after filtering")
+                raise ValueError("No numeric columns remaining after filtering")
+
+    # データの準備
+    plot_df = df[vars].dropna()
+    
+    # バリデーション: dropna後にデータが残っているか
+    if plot_df.empty:
+        _log.error("No data remaining after dropping NaN values")
+        raise ValueError("No data remaining after dropping NaN values")
+    
+    # バリデーション: 最低2列必要
+    if len(plot_df.columns) < 2:
+        _log.error("At least 2 numeric columns are required for pairplot")
+        raise ValueError("At least 2 numeric columns are required for pairplot")
+    
+    _log.debug(f"Plotting {len(plot_df)} rows with {len(plot_df.columns)} columns")
+
+    try: 
+        g = sns.PairGrid(plot_df)
+        g.map_diag(sns.histplot, kde=True)
+        g.map_upper(sns.scatterplot, alpha=0.5)
+        g.map_lower(sns.scatterplot, alpha=0.5)
+        g.figure.set_size_inches(figsize)
+        g.tight_layout()
+        
+        _log.debug("Pairplot created successfully")
+        return g.figure
+        
+    except Exception as e:
+        _log.error(f"Error creating pairplot: {e}")
+        raise
