@@ -21,13 +21,18 @@ dependencies = [
     "pmdarima>=2.1.1",
     "lightgbm>=4.6.0",
     "optuna>=4.7.0",
+    # --- Darts の追加 ---
+    "u8darts[all]>=0.30.0",
+    # --- PyTorch 設定 ---
+    # バージョン番号だけ 2.6.0 に合わせる（GPU版の強制インストールとバージョン整合性を取るため）
+    "torch>=2.6.0; sys_platform != 'darwin'",
+    "torchvision>=0.21.0; sys_platform != 'darwin'",
+    "torchaudio>=2.6.0; sys_platform != 'darwin'",
+    # Mac用の設定
     "torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "torch>=2.0.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "torchvision==0.17.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "torchvision>=0.15.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "torchaudio==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "torchaudio>=2.0.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
-    "click>=8.3.1",
+    "click>=8.3.1"
 ]
 
 [project.optional-dependencies]
@@ -43,16 +48,4 @@ packages = ["src/athena_analyze", "src/utils"]
 [dependency-groups]
 dev = ["pytest", "ruff"]
 
-# --- PyTorch GPU環境向けの専用ソース設定 ---
-# デフォルトはPyPI（CPU版）を使用
-# GPU版が必要な場合: uv sync --extra gpu --index pytorch-cu124
-
-[[tool.uv.index]]
-name = "pytorch-cu124"
-url = "https://download.pytorch.org/whl/cu124"
-explicit = true
-
-[[tool.uv.index]]
-name = "pypi"
-url = "https://pypi.org/simple"
-default = true
+# tool.uv.sources は削除しました
